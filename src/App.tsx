@@ -33,7 +33,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { RosarySection } from './components/RosarySection';
 import { PdfReader } from './components/PdfReader';
 import { supabase, onAuthStateChange, getAdminEmail } from './supabase';
-import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl } from './supabase';
+import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements } from './supabase';
 
 export default function App() {
   // --- STATE LAYER ---
@@ -115,10 +115,15 @@ export default function App() {
     body: ''
   });
 
-  const handleSaveAnnouncement = (ann: Announcement) => {
+  const handleSaveAnnouncement = async (ann: Announcement) => {
     const updated = [ann, ...announcements];
     setAnnouncements(updated);
     localStorage.setItem('breviary_announcements', JSON.stringify(updated));
+    try {
+      await saveAnnouncement(ann);
+    } catch (err) {
+      console.error('Failed to save announcement to Supabase:', err);
+    }
     // Trigger simulation of Push Notification immediately for the newly written announcement!
     setActivePush({
       show: true,
@@ -128,10 +133,15 @@ export default function App() {
     });
   };
 
-  const handleDeleteAnnouncement = (id: string) => {
+  const handleDeleteAnnouncement = async (id: string) => {
     const updated = announcements.filter(a => a.id !== id);
     setAnnouncements(updated);
     localStorage.setItem('breviary_announcements', JSON.stringify(updated));
+    try {
+      await deleteAnnouncement(id);
+    } catch (err) {
+      console.error('Failed to delete announcement from Supabase:', err);
+    }
   };
 
   const handleTriggerPushNotification = (ann: Announcement) => {
@@ -217,57 +227,43 @@ export default function App() {
   // --- INITIALIZATION: Supabase first, then localStorage fallback ---
   useEffect(() => {
     const loadFromSupabase = async () => {
-      try {
-        const [prayerData, saintData, litData, officeData, pdfData] = await Promise.all([
-          fetchPrayers(),
-          fetchSaints(),
-          fetchLiturgicalDays(),
-          fetchOfficeReadings(),
-          fetchPdfDocuments(),
-        ]);
+      let anySuccess = false;
+
+      async function safeFetch<T>(fetchFn: () => Promise<T>, onData: (data: T) => void, cacheKey?: string): Promise<void> {
+        try {
+          const data = await fetchFn();
+          anySuccess = true;
+          onData(data);
+          if (cacheKey && Array.isArray(data) && data.length > 0) {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+          }
+          if (cacheKey && !Array.isArray(data) && data) {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+          }
+        } catch (err) {
+          console.warn(`Supabase fetch failed for ${cacheKey || 'unknown'}:`, err);
+        }
+      }
+
+      await Promise.all([
+        safeFetch(fetchPrayers, setPrayers, 'breviary_prayers'),
+        safeFetch(fetchSaints, setSaints, 'breviary_saints'),
+        safeFetch(fetchLiturgicalDays, setLiturgicalDays, 'breviary_liturgical_days'),
+        safeFetch(fetchOfficeReadings, setOfficeReadings, 'breviary_office_readings'),
+        safeFetch(fetchPdfDocuments, setPdfDocuments, 'breviary_pdfs'),
+        safeFetch(fetchAnnouncements, (data) => { setAnnouncements(data); localStorage.setItem('breviary_announcements', JSON.stringify(data)); }),
+        safeFetch(fetchParishUsers, (data) => { setParishUsers(data); localStorage.setItem('breviary_users', JSON.stringify(data)); }),
+        safeFetch(fetchAdBanner, (data) => { if (data) { setAdBanner(data); localStorage.setItem('breviary_ad', JSON.stringify(data)); } }),
+      ]);
+
+      if (anySuccess) {
         setIsPbConnected(true);
-        if (prayerData.length > 0) {
-          setPrayers(prayerData);
-          localStorage.setItem('breviary_prayers', JSON.stringify(prayerData));
-        }
-        if (saintData.length > 0) {
-          setSaints(saintData);
-          localStorage.setItem('breviary_saints', JSON.stringify(saintData));
-        }
-        if (litData.length > 0) {
-          setLiturgicalDays(litData);
-          localStorage.setItem('breviary_liturgical_days', JSON.stringify(litData));
-        }
-        if (officeData.length > 0) {
-          setOfficeReadings(officeData);
-          localStorage.setItem('breviary_office_readings', JSON.stringify(officeData));
-        }
-        if (pdfData.length > 0) {
-          setPdfDocuments(pdfData);
-          localStorage.setItem('breviary_pdfs', JSON.stringify(pdfData));
-        }
-        if (prayerData.length > 0 || saintData.length > 0 || litData.length > 0 || officeData.length > 0) return;
-      } catch (err) {
-        console.warn('Supabase fetch failed, falling back to local cache:', err);
+        return;
       }
 
       // Fallback: localStorage only
-      const cachedPrayers = localStorage.getItem('breviary_prayers');
-      if (cachedPrayers) setPrayers(JSON.parse(cachedPrayers));
-
-      const cachedSaints = localStorage.getItem('breviary_saints');
-      if (cachedSaints) setSaints(JSON.parse(cachedSaints));
-
-      const cachedLit = localStorage.getItem('breviary_liturgical_days');
-      if (cachedLit) setLiturgicalDays(JSON.parse(cachedLit));
-
-      const cachedOffice = localStorage.getItem('breviary_office_readings');
-      if (cachedOffice) setOfficeReadings(JSON.parse(cachedOffice));
-
       const cachedPdfs = localStorage.getItem('breviary_pdfs');
       if (cachedPdfs) setPdfDocuments(JSON.parse(cachedPdfs));
-
-      // No seed fallback — content comes from Supabase PDFs only
     };
 
     loadFromSupabase();
@@ -460,12 +456,29 @@ export default function App() {
       });
     });
 
+    const unsubAnnouncements = subscribeAnnouncements((action, record) => {
+      setAnnouncements(prev => {
+        let updated = [...prev];
+        if (action === 'INSERT') {
+          const exists = updated.some(a => a.id === record.id);
+          if (!exists) updated = [{ id: record.id, titleEn: record.title_en, titleTa: record.title_ta, descEn: record.desc_en, descTa: record.desc_ta, date: record.date, category: record.category, theme: record.theme }, ...updated];
+        } else if (action === 'UPDATE') {
+          updated = updated.map(a => a.id === record.id ? { id: record.id, titleEn: record.title_en, titleTa: record.title_ta, descEn: record.desc_en, descTa: record.desc_ta, date: record.date, category: record.category, theme: record.theme } : a);
+        } else if (action === 'DELETE') {
+          updated = updated.filter(a => a.id !== record.old.id);
+        }
+        localStorage.setItem('breviary_announcements', JSON.stringify(updated));
+        return updated;
+      });
+    });
+
     return () => {
       unsubPrayers();
       unsubSaints();
       unsubLitDays();
       unsubOffice();
       unsubPdfs();
+      unsubAnnouncements();
     };
   }, []);
 

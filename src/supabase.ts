@@ -2,7 +2,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   Prayer, Saint, LiturgicalDay, JournalEntry, Bookmark,
-  OfficeReading, Announcement, ParishUser, PdfDocument
+  OfficeReading, Announcement, ParishUser, AdBanner, PdfDocument
 } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
@@ -527,6 +527,124 @@ export async function deletePdfDocument(id: string, filePath: string): Promise<v
   await supabase.from('pdf_documents').delete().eq('id', id);
 }
 
+// --- Announcements ---
+
+export async function fetchAnnouncements(): Promise<Announcement[]> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(r => ({
+    id: r.id,
+    titleEn: r.title_en,
+    titleTa: r.title_ta,
+    descEn: r.desc_en,
+    descTa: r.desc_ta,
+    date: r.date,
+    category: r.category,
+    theme: r.theme,
+  }));
+}
+
+export async function saveAnnouncement(ann: Announcement): Promise<void> {
+  const dbData = {
+    title_en: ann.titleEn,
+    title_ta: ann.titleTa,
+    desc_en: ann.descEn,
+    desc_ta: ann.descTa,
+    date: ann.date,
+    category: ann.category,
+    theme: ann.theme,
+  };
+  if (ann.id && ann.id.length >= 15) {
+    await supabase.from('announcements').update(dbData).eq('id', ann.id);
+  } else {
+    await supabase.from('announcements').insert(dbData);
+  }
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await supabase.from('announcements').delete().eq('id', id);
+}
+
+// --- Parish Users ---
+
+export async function fetchParishUsers(): Promise<ParishUser[]> {
+  const { data, error } = await supabase
+    .from('parish_users')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(r => ({
+    id: r.id,
+    fullName: r.full_name,
+    email: r.email,
+    phoneNumber: r.phone_number,
+    role: r.role,
+    registeredDate: r.registered_date,
+  }));
+}
+
+export async function saveParishUser(user: ParishUser): Promise<void> {
+  const dbData = {
+    full_name: user.fullName,
+    email: user.email,
+    phone_number: user.phoneNumber,
+    role: user.role,
+    registered_date: user.registeredDate,
+  };
+  if (user.id && user.id.length >= 15) {
+    await supabase.from('parish_users').update(dbData).eq('id', user.id);
+  } else {
+    await supabase.from('parish_users').insert(dbData);
+  }
+}
+
+export async function deleteParishUser(id: string): Promise<void> {
+  await supabase.from('parish_users').delete().eq('id', id);
+}
+
+// --- Ad Banner ---
+
+export async function fetchAdBanner(): Promise<AdBanner | null> {
+  const { data, error } = await supabase
+    .from('ad_banners')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    active: data.active,
+    titleEn: data.title_en,
+    titleTa: data.title_ta,
+    descEn: data.desc_en,
+    descTa: data.desc_ta,
+    linkUrl: data.link_url,
+    theme: data.theme,
+  };
+}
+
+export async function saveAdBanner(banner: AdBanner): Promise<void> {
+  const dbData = {
+    active: banner.active,
+    title_en: banner.titleEn,
+    title_ta: banner.titleTa,
+    desc_en: banner.descEn,
+    desc_ta: banner.descTa,
+    link_url: banner.linkUrl,
+    theme: banner.theme,
+  };
+  if (banner.id && banner.id.length >= 15) {
+    await supabase.from('ad_banners').update(dbData).eq('id', banner.id);
+  } else {
+    await supabase.from('ad_banners').insert(dbData);
+  }
+}
+
 // --- Realtime Subscriptions ---
 
 export function subscribePrayers(callback: (action: string, record: any) => void): () => void {
@@ -613,6 +731,17 @@ export function subscribePdfDocumentsByDate(date: string, callback: (action: str
     .channel(`pdf-documents-${date}-changes`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'pdf_documents', filter: `date=eq.${date}` },
+      (payload) => callback(payload.eventType, payload.new)
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+export function subscribeAnnouncements(callback: (action: string, record: any) => void): () => void {
+  const channel = supabase
+    .channel('announcements-changes')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'announcements' },
       (payload) => callback(payload.eventType, payload.new)
     )
     .subscribe();
