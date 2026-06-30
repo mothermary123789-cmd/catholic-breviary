@@ -30,6 +30,7 @@ interface AdminPanelProps {
   onTriggerPushNotification?: (announcement: Announcement) => void;
   pdfDocuments?: PdfDocument[];
   onViewPdf?: (url: string, title: string) => void;
+  onDeletePdf?: (id: string, filePath: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -60,6 +61,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onTriggerPushNotification,
   pdfDocuments = [],
   onViewPdf,
+  onDeletePdf,
 }) => {
   // Admin Login Session
   const canAccessAdmin = currentUser?.email === 'mothermary123789@gmail.com';
@@ -900,12 +902,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <Eye size={14} />
                         </button>
                         <button
-                          onClick={async () => {
+                          onClick={() => {
                             if (window.confirm(`Delete "${doc.title}"?`)) {
-                              try {
-                                await deletePdfDocument(doc.id, doc.filePath);
-                              } catch (err) {
-                                console.error('Failed to delete PDF:', err);
+                              if (onDeletePdf) {
+                                onDeletePdf(doc.id, doc.filePath);
+                              } else {
+                                deletePdfDocument(doc.id, doc.filePath).catch(err => console.error('Failed to delete PDF:', err));
                               }
                             }
                           }}

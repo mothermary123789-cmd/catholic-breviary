@@ -33,7 +33,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { RosarySection } from './components/RosarySection';
 import { PdfReader } from './components/PdfReader';
 import { supabase, onAuthStateChange, getAdminEmail } from './supabase';
-import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements } from './supabase';
+import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements, deletePdfDocument } from './supabase';
 
 export default function App() {
   // --- STATE LAYER ---
@@ -49,6 +49,7 @@ export default function App() {
   const [pdfDocuments, setPdfDocuments] = useState<PdfDocument[]>([]);
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
+  const [autoOpenPdfId, setAutoOpenPdfId] = useState<string | null>(null);
 
   // User preferences
   const [userSettings, setUserSettings] = useState<UserSettings>({
@@ -210,6 +211,23 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 1024 || /Mobi|Android|iPhone/i.test(window.navigator.userAgent);
   }
+
+  // Auto-open PDF in full-page reader when selected date + category + language finds a match
+  useEffect(() => {
+    if (!pdfViewerUrl && !autoOpenPdfId) {
+      const pdf = pdfDocuments.find(
+        d => d.category === selectedPrayerCategory && d.date === selectedDate && d.language === userSettings.language
+      ) || pdfDocuments.find(
+        d => d.category === selectedPrayerCategory && d.date === selectedDate && d.language !== userSettings.language
+      );
+      if (pdf) {
+        const url = getPdfStorageUrl(pdf.filePath);
+        setPdfViewerUrl(url);
+        setPdfViewerTitle(pdf.title);
+        setAutoOpenPdfId(pdf.id);
+      }
+    }
+  }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments, autoOpenPdfId, pdfViewerUrl]);
 
   // Automatically update layout mode on resizing or orienting
   useEffect(() => {
@@ -721,6 +739,19 @@ export default function App() {
     }
   };
 
+  const handleDeletePdf = async (id: string, filePath: string) => {
+    try {
+      await deletePdfDocument(id, filePath);
+      setPdfDocuments(prev => {
+        const updated = prev.filter(d => d.id !== id);
+        localStorage.setItem('breviary_pdfs', JSON.stringify(updated));
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to delete PDF:', err);
+    }
+  };
+
   // --- USER LEVEL INTERACTIONS ---
   // Adding journal reflection entry
   const handleAddJournalEntry = async (title: string, reflection: string, associatedPrayerId?: string) => {
@@ -1056,6 +1087,7 @@ export default function App() {
                   setPdfViewerUrl(url);
                   setPdfViewerTitle(title);
                 }}
+                onDeletePdf={handleDeletePdf}
               />
             </div>
           </div>
@@ -1875,83 +1907,15 @@ export default function App() {
                                       </div>
                                     );
                                   }
-                                  const targetPdf = pdf || pdfOtherLang;
-                                  const langLabel = targetPdf!.language === 'ta' ? 'தமிழ்' : 'English';
-
-                                  if (targetPdf!.extractedText) {
-                                    const pages = targetPdf!.extractedText.split('--- Page ').filter((p, i) => i === 0 || p.trim().length > 0);
-                                    return (
-                                      <div className="space-y-4 w-full max-w-sm">
-                                        <div className="p-4 rounded-2xl bg-white dark:bg-[#191410] border border-amber-200 dark:border-amber-950/30 shadow-xs text-left space-y-3 max-h-[60vh] overflow-y-auto">
-                                          <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-[#191410] pb-2 border-b border-amber-100 dark:border-amber-900/30 z-10">
-                                            <div>
-                                              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                                                {targetPdf!.title}
-                                              </h3>
-                                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                                {targetPdf!.date} • {langLabel} • {targetPdf!.pageCount || 0} pages
-                                              </p>
-                                            </div>
-                                            <button
-                                              onClick={() => {
-                                                const url = getPdfStorageUrl(targetPdf!.filePath);
-                                                setPdfViewerUrl(url);
-                                                setPdfViewerTitle(targetPdf!.title);
-                                              }}
-                                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition"
-                                              title="Open PDF"
-                                            >
-                                              <ExternalLink size={14} />
-                                            </button>
-                                          </div>
-                                          <div className="space-y-3">
-                                            {pages.map((pageText, idx) => {
-                                              const pageNum = idx;
-                                              const cleanText = pageText.replace(/^(\d+)\s*/, '').trim();
-                                              if (!cleanText) return null;
-                                              return (
-                                                <div key={idx} className="p-3 rounded-xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/40">
-                                                  <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block mb-1.5">
-                                                    {userSettings.language === 'ta' ? `பக்கம் ${pageNum}` : `Page ${pageNum}`}
-                                                  </span>
-                                                  <p className={`whitespace-pre-wrap font-serif leading-relaxed text-slate-800 dark:text-amber-55/90 ${activeFontClass}`}>
-                                                    {cleanText}
-                                                  </p>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-
-                                  return (
-                                    <div className="space-y-4 w-full max-w-sm">
-                                      <div className="p-6 rounded-2xl bg-white dark:bg-[#191410] border border-amber-200 dark:border-amber-950/30 shadow-xs text-center space-y-3">
-                                        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/30 flex items-center justify-center">
-                                          <FileText size={28} className="text-amber-600" />
-                                        </div>
-                                        <div>
-                                          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                                            {targetPdf!.title}
-                                          </h3>
-                                          <p className="text-xs text-slate-400 mt-1">
-                                            {targetPdf!.date} • {langLabel} • {(targetPdf!.fileSize ? (targetPdf!.fileSize / 1024).toFixed(0) : '?')} KB
-                                          </p>
-                                        </div>
-                                        <button
-                                          onClick={() => {
-                                            const url = getPdfStorageUrl(targetPdf!.filePath);
-                                            setPdfViewerUrl(url);
-                                            setPdfViewerTitle(targetPdf!.title);
-                                          }}
-                                          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2"
-                                        >
-                                          <Eye size={14} />
-                                          {userSettings.language === 'ta' ? 'PDF ஐப் பார்க்க' : 'View PDF'}
-                                        </button>
-                                      </div>
+                                  return pdfViewerUrl ? (
+                                    <div className="flex items-center justify-center min-h-[200px]">
+                                      <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                                      <p className="text-xs text-slate-400 ml-3">Opening PDF reader...</p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center min-h-[200px]">
+                                      <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                                      <p className="text-xs text-slate-400 ml-3">Loading PDF...</p>
                                     </div>
                                   );
                                 })()}
@@ -2227,6 +2191,7 @@ export default function App() {
           onClose={() => {
             setPdfViewerUrl(null);
             setPdfViewerTitle('');
+            setAutoOpenPdfId(null);
           }}
         />
       )}

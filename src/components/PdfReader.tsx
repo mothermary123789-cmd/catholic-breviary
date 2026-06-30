@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Search, Download, ExternalLink, FileText } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Search, Download, ExternalLink, FileText, Settings, Sun, Moon, Palette } from 'lucide-react';
 
 interface PdfReaderProps {
   url: string;
   title: string;
   onClose: () => void;
+}
+
+interface ReadingSettings {
+  brightness: number;
+  contrast: number;
+  sepia: number;
+  invert: number;
+  background: 'default' | 'cream' | 'dark' | 'blue' | 'green';
 }
 
 export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => {
@@ -22,6 +30,14 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
   const [rendering, setRendering] = useState(false);
   const [pageAnim, setPageAnim] = useState<'idle' | 'exit' | 'enter'>('idle');
   const [pageDir, setPageDir] = useState<1 | -1>(1);
+  const [showTools, setShowTools] = useState(false);
+  const [readingSettings, setReadingSettings] = useState<ReadingSettings>({
+    brightness: 100,
+    contrast: 100,
+    sepia: 0,
+    invert: 0,
+    background: 'default',
+  });
   const prevPageRef = useRef<number>(1);
 
   const loadPdf = useCallback(async () => {
@@ -116,6 +132,21 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
     setCurrentPage(searchResults[prev]);
   };
 
+  const updateSetting = (key: keyof ReadingSettings, value: number | string) => {
+    setReadingSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const filterStyle: React.CSSProperties = {
+    filter: `brightness(${readingSettings.brightness}%) contrast(${readingSettings.contrast}%) sepia(${readingSettings.sepia}%) invert(${readingSettings.invert}%)`,
+    transition: 'filter 0.2s ease',
+  };
+
+  const bgClass = readingSettings.background === 'cream' ? 'bg-amber-50' :
+    readingSettings.background === 'dark' ? 'bg-slate-900' :
+    readingSettings.background === 'blue' ? 'bg-blue-50' :
+    readingSettings.background === 'green' ? 'bg-emerald-50' :
+    'bg-stone-100 dark:bg-stone-950';
+
   const pageExitClass = pageAnim === 'exit'
     ? (pageDir === 1
       ? 'opacity-0 -translate-x-12 scale-[0.97] rotate-[-1deg]'
@@ -179,6 +210,15 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
 
             <div className="w-px h-5 bg-slate-200 dark:bg-stone-700 mx-1" />
 
+            {/* Reading Tools Toggle */}
+            <button
+              onClick={() => setShowTools(!showTools)}
+              className={`p-1.5 rounded-lg transition ${showTools ? 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800'}`}
+              title="Reading Tools"
+            >
+              <Palette size={15} />
+            </button>
+
             <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Open in new tab">
               <ExternalLink size={15} />
             </a>
@@ -190,6 +230,98 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
             </button>
           </div>
         </div>
+
+        {/* Reading Tools Panel */}
+        {showTools && (
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-stone-800 bg-white dark:bg-stone-950 shrink-0 animate-in slide-in-from-top duration-200">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Brightness */}
+              <div className="flex items-center gap-2">
+                <Sun size={13} className="text-slate-400" />
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  value={readingSettings.brightness}
+                  onChange={(e) => updateSetting('brightness', parseInt(e.target.value))}
+                  className="w-20 h-1.5 accent-amber-600"
+                />
+                <span className="text-[10px] text-slate-500 w-8">{readingSettings.brightness}%</span>
+              </div>
+
+              {/* Contrast */}
+              <div className="flex items-center gap-2">
+                <Sun size={13} className="text-slate-400" />
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  value={readingSettings.contrast}
+                  onChange={(e) => updateSetting('contrast', parseInt(e.target.value))}
+                  className="w-20 h-1.5 accent-amber-600"
+                />
+                <span className="text-[10px] text-slate-500 w-8">{readingSettings.contrast}%</span>
+              </div>
+
+              {/* Sepia */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => updateSetting('sepia', readingSettings.sepia === 100 ? 0 : 100)}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition ${
+                    readingSettings.sepia === 100
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-100 dark:bg-stone-800 text-slate-600 dark:text-stone-400 border border-slate-200 dark:border-stone-700'
+                  }`}
+                >
+                  Sepia
+                </button>
+              </div>
+
+              {/* Invert */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => updateSetting('invert', readingSettings.invert === 100 ? 0 : 100)}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition ${
+                    readingSettings.invert === 100
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 dark:bg-stone-800 text-slate-600 dark:text-stone-400 border border-slate-200 dark:border-stone-700'
+                  }`}
+                >
+                  Invert
+                </button>
+              </div>
+
+              {/* Background */}
+              <div className="flex items-center gap-1.5">
+                <Moon size={13} className="text-slate-400" />
+                {[
+                  { id: 'default', label: 'Default', cls: 'bg-stone-100 dark:bg-stone-950 border-stone-300' },
+                  { id: 'cream', label: 'Cream', cls: 'bg-amber-50 border-amber-300' },
+                  { id: 'dark', label: 'Dark', cls: 'bg-slate-900 border-slate-600' },
+                  { id: 'blue', label: 'Blue', cls: 'bg-blue-50 border-blue-300' },
+                  { id: 'green', label: 'Green', cls: 'bg-emerald-50 border-emerald-300' },
+                ].map((bg) => (
+                  <button
+                    key={bg.id}
+                    onClick={() => updateSetting('background', bg.id)}
+                    className={`w-5 h-5 rounded-full border-2 transition ${bg.cls} ${
+                      readingSettings.background === bg.id ? 'scale-125 ring-2 ring-amber-500 ring-offset-1 dark:ring-offset-stone-900' : ''
+                    }`}
+                    title={bg.label}
+                  />
+                ))}
+              </div>
+
+              {/* Reset */}
+              <button
+                onClick={() => setReadingSettings({ brightness: 100, contrast: 100, sepia: 0, invert: 0, background: 'default' })}
+                className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Search Bar */}
         {showSearch && (
@@ -230,7 +362,7 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
         )}
 
         {/* PDF Canvas Area */}
-        <div className="flex-1 overflow-auto bg-stone-100 dark:bg-stone-950 flex flex-col items-center p-4 relative">
+        <div className={`flex-1 overflow-auto ${bgClass} flex flex-col items-center p-4 relative`}>
           {loading ? (
             <div className="flex items-center justify-center h-full min-h-[300px]">
               <div className="text-center space-y-3">
@@ -269,17 +401,19 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
                 </button>
               </div>
 
-              {/* Canvas with page turn animation */}
+              {/* Canvas with page turn animation + reading filters */}
               <div
                 ref={pageWrapRef}
                 className={`transition-all duration-300 ease-out ${animClass}`}
                 style={{ perspective: '1200px' }}
               >
-                <canvas
-                  ref={canvasRef}
-                  className="shadow-xl rounded-lg bg-white"
-                  style={{ maxWidth: '100%', height: 'auto' }}
-                />
+                <div style={filterStyle}>
+                  <canvas
+                    ref={canvasRef}
+                    className={`shadow-xl rounded-lg ${readingSettings.background === 'dark' ? 'ring-1 ring-white/10' : ''}`}
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                </div>
               </div>
 
               {rendering && (
