@@ -1,0 +1,6 @@
+{
+  "name": "Tamil English Breviary",
+  "description": "Tamil & English Breviary with offline daily prayers, liturgical calendar, daily readings, saint profiles, dynamic language switching, customizable accessibility settings, personal journal, and a content management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

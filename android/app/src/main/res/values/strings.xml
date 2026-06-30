@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Catholic Breviary</string>
+    <string name="title_activity_main">Catholic Breviary</string>
+    <string name="package_name">com.frbastin.breviary</string>
+    <string name="custom_url_scheme">com.frbastin.breviary</string>
+</resources>

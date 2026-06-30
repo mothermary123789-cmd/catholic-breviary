@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom classical text support classes for Professional Polish liturgical look */
+.liturgical-rubric {
+  color: #b91c1c; /* text-red-700 */
+  font-weight: 700;
+  font-family: inherit;
+  margin-right: 0.25rem;
+}
+
+.bg-warm-canvas {
+  background-color: #fdfaf6;
+}
+
+.text-indigo-brand {
+  color: #1a103c;
+}
+
+.text-amber-brand {
+  color: #b45309;
+}

@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1097203560851",
+    "firebase_url": "https://breaviary-5c2eb-default-rtdb.firebaseio.com",
+    "project_id": "breaviary-5c2eb",
+    "storage_bucket": "breaviary-5c2eb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097203560851:android:045d116e93c283c2dff866",
+        "android_client_info": {
+          "package_name": "com.frbastin.breviary"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1097203560851-tfcomeoaj3p79lnv488gqu6s6eumg97o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARF6h2Jxq_M4pUesUESFBOsVxaNEA4EPg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1097203560851-tfcomeoaj3p79lnv488gqu6s6eumg97o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
