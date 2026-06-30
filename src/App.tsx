@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, 
   Calendar as CalendarIcon, 
@@ -50,6 +50,7 @@ export default function App() {
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
   const [autoOpenPdfId, setAutoOpenPdfId] = useState<string | null>(null);
+  const [pdfViewerDoc, setPdfViewerDoc] = useState<PdfDocument | null>(null);
 
   // User preferences
   const [userSettings, setUserSettings] = useState<UserSettings>({
@@ -178,6 +179,7 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [selectedPrayerCategory, setSelectedPrayerCategory] = useState<PrayerCategory>('morning');
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const hasInteracted = useRef(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Search input for prayers list
@@ -214,6 +216,7 @@ export default function App() {
 
   // Auto-open PDF in full-page reader when selected date + category + language finds a match
   useEffect(() => {
+    if (!hasInteracted.current) return;
     if (!pdfViewerUrl && !autoOpenPdfId) {
       const pdf = pdfDocuments.find(
         d => d.category === selectedPrayerCategory && d.date === selectedDate && d.language === userSettings.language
@@ -225,9 +228,10 @@ export default function App() {
         setPdfViewerUrl(url);
         setPdfViewerTitle(pdf.title);
         setAutoOpenPdfId(pdf.id);
+        setPdfViewerDoc(pdf);
       }
     }
-  }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments, autoOpenPdfId, pdfViewerUrl]);
+  }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments]);
 
   // Automatically update layout mode on resizing or orienting
   useEffect(() => {
@@ -1308,6 +1312,7 @@ export default function App() {
                       <button
                         key={b.id}
                         onClick={() => {
+                          hasInteracted.current = true;
                           if (b.itemType === 'prayer') {
                             const p = prayers.find((x) => x.id === b.itemId);
                             if (p) {
@@ -1834,11 +1839,11 @@ export default function App() {
                                 <input
                                   type="date"
                                   value={selectedDate}
-                                  onChange={(e) => setSelectedDate(e.target.value)}
+                                  onChange={(e) => { hasInteracted.current = true; setSelectedDate(e.target.value); }}
                                   className="flex-1 text-xs px-2 py-1.5 rounded-lg border bg-white dark:bg-stone-900 border-slate-200 dark:border-stone-800 text-slate-800 dark:text-slate-100 font-bold"
                                 />
                                 <button
-                                  onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                                  onClick={() => { hasInteracted.current = true; setSelectedDate(new Date().toISOString().split('T')[0]); }}
                                   className="text-[10px] font-bold text-amber-700 dark:text-amber-400 px-2 py-1 hover:underline"
                                 >
                                   {userSettings.language === 'ta' ? 'இன்று' : 'Today'}
@@ -1866,6 +1871,7 @@ export default function App() {
                                     <button
                                       key={hour.id}
                                       onClick={() => {
+                                        hasInteracted.current = true;
                                         setSelectedPrayerCategory(hour.id as any);
                                         setPrayerSearch('');
                                       }}
@@ -1965,6 +1971,7 @@ export default function App() {
                                       </span>
                                       <button
                                         onClick={() => {
+                                          hasInteracted.current = true;
                                           if (b.itemType === 'prayer') {
                                             const p = prayers.find((x) => x.id === b.itemId);
                                             if (p) {
@@ -2134,6 +2141,7 @@ export default function App() {
                           <button
                             key={tab.id}
                             onClick={() => {
+                              hasInteracted.current = true;
                               setActivePhoneTab(tab.id);
                               setShowWelcome(false);
                               if (tab.id === 'saints') setSelectedPrayerCategory('saints');
@@ -2188,10 +2196,12 @@ export default function App() {
         <PdfReader
           url={pdfViewerUrl}
           title={pdfViewerTitle}
+          pdfData={pdfViewerDoc}
           onClose={() => {
             setPdfViewerUrl(null);
             setPdfViewerTitle('');
             setAutoOpenPdfId(null);
+            setPdfViewerDoc(null);
           }}
         />
       )}

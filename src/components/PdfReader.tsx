@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Search, Download, ExternalLink, FileText, Settings, Sun, Moon, Palette } from 'lucide-react';
+import { PdfDocument } from '../types';
 
 interface PdfReaderProps {
   url: string;
   title: string;
   onClose: () => void;
+  pdfData?: PdfDocument;
 }
 
 interface ReadingSettings {
@@ -15,7 +17,7 @@ interface ReadingSettings {
   background: 'default' | 'cream' | 'dark' | 'blue' | 'green';
 }
 
-export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => {
+export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose, pdfData }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageWrapRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -39,6 +41,19 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
     background: 'default',
   });
   const prevPageRef = useRef<number>(1);
+  const [offlinePages, setOfflinePages] = useState<string[]>([]);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const loadPdf = useCallback(async () => {
     try {
@@ -74,8 +89,25 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
   }, []);
 
   useEffect(() => {
-    loadPdf();
-  }, [loadPdf]);
+    if (isOffline && pdfData?.extractedText) {
+      const raw = pdfData.extractedText;
+      const regex = /--- Page \d+ ---/;
+      const parts = raw.split(regex).filter(p => p.trim().length > 0);
+      if (parts.length > 0) {
+        setOfflinePages(parts);
+        setTotalPages(parts.length);
+      } else {
+        setOfflinePages([raw]);
+        setTotalPages(1);
+      }
+      setCurrentPage(1);
+      setLoading(false);
+    } else if (!isOffline) {
+      loadPdf();
+    } else {
+      setLoading(false);
+    }
+  }, [url, pdfData, isOffline, loadPdf]);
 
   useEffect(() => {
     if (pdfDoc) {
@@ -117,6 +149,21 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
       setCurrentPage(results[0]);
     }
   }, [searchQuery, pdfDoc]);
+
+  const searchInText = useCallback(() => {
+    if (!searchQuery.trim() || offlinePages.length === 0) return;
+    const results: number[] = [];
+    offlinePages.forEach((text, idx) => {
+      if (text.toLowerCase().includes(searchQuery.toLowerCase())) {
+        results.push(idx + 1);
+      }
+    });
+    setSearchResults(results);
+    setCurrentSearchIdx(0);
+    if (results.length > 0) {
+      setCurrentPage(results[0]);
+    }
+  }, [searchQuery, offlinePages]);
 
   const nextSearchResult = () => {
     if (searchResults.length === 0) return;
@@ -161,6 +208,8 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
 
   const animClass = pageAnim === 'exit' ? pageExitClass : pageEnterClass;
 
+  const showOfflineText = isOffline && offlinePages.length > 0;
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-2 md:p-4">
       <style>{`
@@ -188,8 +237,13 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
               {title}
             </h3>
             <span className="text-[10px] text-slate-400 font-medium shrink-0">
-              Page {currentPage} / {totalPages}
+              {showOfflineText ? 'Offline' : `Page ${currentPage} / ${totalPages}`}
             </span>
+            {showOfflineText && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 shrink-0">
+                Offline
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -200,13 +254,17 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
             >
               <Search size={15} />
             </button>
-            <button onClick={zoomOut} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Zoom Out">
-              <ZoomOut size={15} />
-            </button>
-            <span className="text-[10px] font-bold text-slate-500 w-8 text-center">{Math.round(scale * 100)}%</span>
-            <button onClick={zoomIn} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Zoom In">
-              <ZoomIn size={15} />
-            </button>
+            {!showOfflineText && (
+              <>
+                <button onClick={zoomOut} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Zoom Out">
+                  <ZoomOut size={15} />
+                </button>
+                <span className="text-[10px] font-bold text-slate-500 w-8 text-center">{Math.round(scale * 100)}%</span>
+                <button onClick={zoomIn} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Zoom In">
+                  <ZoomIn size={15} />
+                </button>
+              </>
+            )}
 
             <div className="w-px h-5 bg-slate-200 dark:bg-stone-700 mx-1" />
 
@@ -219,12 +277,16 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
               <Palette size={15} />
             </button>
 
-            <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Open in new tab">
-              <ExternalLink size={15} />
-            </a>
-            <a href={url} download className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Download">
-              <Download size={15} />
-            </a>
+            {!showOfflineText && (
+              <>
+                <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Open in new tab">
+                  <ExternalLink size={15} />
+                </a>
+                <a href={url} download className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-stone-800 transition" title="Download">
+                  <Download size={15} />
+                </a>
+              </>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition" title="Close">
               <X size={16} />
             </button>
@@ -333,12 +395,17 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && searchInPdf()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (showOfflineText) searchInText();
+                      else searchInPdf();
+                    }
+                  }}
                   placeholder="Search text in this PDF..."
                   className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-stone-700 bg-slate-50 dark:bg-stone-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
-              <button onClick={searchInPdf} className="px-3 py-1.5 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition">
+              <button onClick={showOfflineText ? searchInText : searchInPdf} className="px-3 py-1.5 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition">
                 Search
               </button>
               {searchResults.length > 0 && (
@@ -361,13 +428,15 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
           </div>
         )}
 
-        {/* PDF Canvas Area */}
+        {/* PDF Canvas / Text Area */}
         <div className={`flex-1 overflow-auto ${bgClass} flex flex-col items-center p-4 relative`}>
           {loading ? (
             <div className="flex items-center justify-center h-full min-h-[300px]">
               <div className="text-center space-y-3">
                 <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs text-slate-400">Loading PDF...</p>
+                <p className="text-xs text-slate-400">
+                  {isOffline ? 'No offline content available.' : 'Loading PDF...'}
+                </p>
               </div>
             </div>
           ) : (
@@ -401,25 +470,41 @@ export const PdfReader: React.FC<PdfReaderProps> = ({ url, title, onClose }) => 
                 </button>
               </div>
 
-              {/* Canvas with page turn animation + reading filters */}
-              <div
-                ref={pageWrapRef}
-                className={`transition-all duration-300 ease-out ${animClass}`}
-                style={{ perspective: '1200px' }}
-              >
-                <div style={filterStyle}>
-                  <canvas
-                    ref={canvasRef}
-                    className={`shadow-xl rounded-lg ${readingSettings.background === 'dark' ? 'ring-1 ring-white/10' : ''}`}
-                    style={{ maxWidth: '100%', height: 'auto' }}
-                  />
+              {showOfflineText ? (
+                <div
+                  className={`w-full transition-all duration-300 ease-out ${animClass}`}
+                  style={{ perspective: '1200px' }}
+                >
+                  <div
+                    className={`p-6 rounded-lg ${bgClass} text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap font-serif text-sm`}
+                    style={filterStyle}
+                  >
+                    {offlinePages[currentPage - 1] || 'No content available.'}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Canvas with page turn animation + reading filters */}
+                  <div
+                    ref={pageWrapRef}
+                    className={`transition-all duration-300 ease-out ${animClass}`}
+                    style={{ perspective: '1200px' }}
+                  >
+                    <div style={filterStyle}>
+                      <canvas
+                        ref={canvasRef}
+                        className={`shadow-xl rounded-lg ${readingSettings.background === 'dark' ? 'ring-1 ring-white/10' : ''}`}
+                        style={{ maxWidth: '100%', height: 'auto' }}
+                      />
+                    </div>
+                  </div>
 
-              {rendering && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-                </div>
+                  {rendering && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Page Navigation Bottom */}
