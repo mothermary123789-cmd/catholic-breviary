@@ -2041,7 +2041,7 @@ export default function App() {
                                               <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest block text-center">Source: {externalSourceLabel}</span>
                                             )}
                                             {day.readingFirstEn && (
-                                              <div className="p-4 rounded-xl bg-white dark:bg-stone-900/95 border border-slate-200 dark:border-stone-800 shadow-sm">
+                                              <div className="p-5 rounded-xl bg-white dark:bg-stone-900/95 border border-slate-200 dark:border-stone-800 shadow-sm">
                                                 <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'முதல் வாசகம்' : 'First Reading'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.readingFirstRefEn}</span>
                                                 <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn}</p>
@@ -2077,10 +2077,10 @@ export default function App() {
                                       if (prayer) {
                                         return (
                                           <div className="space-y-3 text-left w-full">
-                                            <div className="p-5 rounded-xl bg-white dark:bg-stone-900/95 border border-amber-200/40 dark:border-amber-900/30 shadow-sm">
+                                            <div className="p-6 rounded-xl bg-white dark:bg-stone-900/95 border border-amber-200/40 dark:border-amber-900/30 shadow-sm">
                                               <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'இன்றைய செபம்' : "Today's Prayer"}</span>
-                                              <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1 font-serif">{userSettings.language === 'ta' ? prayer.titleTa : prayer.titleEn}</h3>
-                                              <div className="h-px bg-amber-200/40 dark:bg-amber-900/30 my-3" />
+                                              <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1.5 font-serif">{userSettings.language === 'ta' ? prayer.titleTa : prayer.titleEn}</h3>
+                                              <div className="h-px bg-amber-200/40 dark:bg-amber-900/30 my-4" />
                                               <div className={`prayer-content leading-loose ${contentSizeClass}`}>{userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn}</div>
                                             </div>
                                           </div>
