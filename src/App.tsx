@@ -34,7 +34,7 @@ import { RosarySection } from './components/RosarySection';
 import { PdfReader } from './components/PdfReader';
 import { supabase, onAuthStateChange, getAdminEmail } from './supabase';
 import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements, deletePdfDocument } from './supabase';
-import { fetchExternalReadings, fetchExternalSaint } from './externalSource';
+import { fetchExternalReadings, fetchExternalSaint, fetchExternalPrayers, fetchExternalOfficeReading } from './externalSource';
 
 export default function App() {
   // --- STATE LAYER ---
@@ -237,15 +237,17 @@ export default function App() {
     }
   }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments]);
 
-  // Fetch readings from external source (USCCB) when date changes
+  // Fetch readings from external source (USCCB / iBreviary) when date changes
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setIsLoadingExternal(true);
       setExternalSourceLabel('');
-      const [readingsResult, saintResult] = await Promise.all([
+      const [readingsResult, saintResult, prayersResult, officeResult] = await Promise.all([
         fetchExternalReadings(selectedDate),
         fetchExternalSaint(selectedDate),
+        fetchExternalPrayers(selectedDate),
+        fetchExternalOfficeReading(selectedDate),
       ]);
       if (cancelled) return;
       setIsLoadingExternal(false);
@@ -265,7 +267,23 @@ export default function App() {
           return [...prev, saintResult.data!];
         });
       }
-      if (!readingsResult.data && !saintResult.data) {
+      if (prayersResult.data) {
+        setPrayers(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newPrayers = prayersResult.data!.filter(p => !existingIds.has(p.id));
+          if (newPrayers.length === 0) return prev;
+          return [...newPrayers, ...prev];
+        });
+        if (!externalSourceLabel) setExternalSourceLabel(prayersResult.source);
+      }
+      if (officeResult.data) {
+        setOfficeReadings(prev => {
+          const existing = prev.find(o => o.id === officeResult.data!.id);
+          if (existing) return prev;
+          return [...prev, officeResult.data!];
+        });
+      }
+      if (!readingsResult.data && !saintResult.data && !prayersResult.data && !officeResult.data) {
         setExternalSourceLabel('');
       }
     };
