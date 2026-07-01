@@ -106,9 +106,24 @@ function extractFirstReading(html: string): { ref: string; text: string } | null
 // ─── iBreviary helpers ───
 
 function extractIbreviaryContent(html: string): string {
-  const m = html.match(/<div\s+id="contenuto">(.*?)<\/div>\s*<\/body>/s);
-  if (!m) return html;
-  return m[1];
+  const startMatch = html.match(/<div\s+id="contenuto">/);
+  if (!startMatch) return html;
+  const start = startMatch.index! + startMatch[0].length;
+  let depth = 1;
+  let pos = start;
+  while (depth > 0 && pos < html.length) {
+    const openIdx = html.indexOf('<div', pos);
+    const closeIdx = html.indexOf('</div>', pos);
+    if (closeIdx === -1) break;
+    if (openIdx !== -1 && openIdx < closeIdx) {
+      depth++;
+      pos = openIdx + 4;
+    } else {
+      depth--;
+      pos = closeIdx + 6;
+    }
+  }
+  return html.slice(start, pos - 6);
 }
 
 function extractIbreviaryTitle(html: string): string {
@@ -129,33 +144,33 @@ function extractIbreviaryDateLabel(html: string): string {
   return '';
 }
 
-function formatIbreviaryText(content: string): string {
-  let text = content;
-
-  // 1. Replace section headers with visible markers
-  text = text.replace(
-    /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi,
-    (_, name) => `\n\n  ◈ ${cleanHtml(name).toUpperCase()} ◈\n`
-  );
-
-  // 2. Replace <hr> with visible separators
-  text = text.replace(/<hr\s*\/?>/gi, '\n\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n');
-
-  // 3. Handle <br> and block-level tags as newlines
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<\/p>/gi, '\n\n');
-  text = text.replace(/<\/div>/gi, '\n');
-
-  // 4. Format antiphons and responses
-  text = text.replace(/Ant\./g, '\n    Ant. ');
-  text = text.replace(/℟\./g, '\n    ℟. ');
-  text = text.replace(/℣\./g, '\n    ℣. ');
-
-  // 5. Strip remaining HTML tags
-  text = text.replace(/<[^>]+>/g, '');
-
-  // 6. Clean entities
-  text = text
+function decodeEntities(text: string): string {
+  const entityMap: Record<string, string> = {
+    '&mdash;': '\u2014', '&ndash;': '\u2013',
+    '&lsquo;': '\u2018', '&rsquo;': '\u2019',
+    '&ldquo;': '\u201C', '&rdquo;': '\u201D',
+    '&bull;': '\u2022', '&hellip;': '\u2026',
+    '&agrave;': '\u00E0', '&aacute;': '\u00E1', '&acirc;': '\u00E2', '&atilde;': '\u00E3', '&auml;': '\u00E4',
+    '&egrave;': '\u00E8', '&eacute;': '\u00E9', '&ecirc;': '\u00EA', '&euml;': '\u00EB',
+    '&igrave;': '\u00EC', '&iacute;': '\u00ED', '&icirc;': '\u00EE', '&iuml;': '\u00EF',
+    '&ograve;': '\u00F2', '&oacute;': '\u00F3', '&ocirc;': '\u00F4', '&otilde;': '\u00F5', '&ouml;': '\u00F6',
+    '&ugrave;': '\u00F9', '&uacute;': '\u00FA', '&ucirc;': '\u00FB', '&uuml;': '\u00FC',
+    '&ntilde;': '\u00F1', '&ccedil;': '\u00E7',
+    '&Agrave;': '\u00C0', '&Aacute;': '\u00C1', '&Acirc;': '\u00C2', '&Atilde;': '\u00C3', '&Auml;': '\u00C4',
+    '&Egrave;': '\u00C8', '&Eacute;': '\u00C9', '&Ecirc;': '\u00CA', '&Euml;': '\u00CB',
+    '&Igrave;': '\u00CC', '&Iacute;': '\u00CD', '&Icirc;': '\u00CE', '&Iuml;': '\u00CF',
+    '&Ograve;': '\u00D2', '&Oacute;': '\u00D3', '&Ocirc;': '\u00D4', '&Otilde;': '\u00D5', '&Ouml;': '\u00D6',
+    '&Ugrave;': '\u00D9', '&Uacute;': '\u00DA', '&Ucirc;': '\u00DB', '&Uuml;': '\u00DC',
+    '&Ntilde;': '\u00D1', '&Ccedil;': '\u00C7',
+    '&copy;': '\u00A9', '&reg;': '\u00AE', '&trade;': '\u2122',
+    '&dagger;': '\u2020', '&Dagger;': '\u2021',
+    '&para;': '\u00B6', '&sect;': '\u00A7',
+  };
+  let result = text;
+  for (const [entity, char] of Object.entries(entityMap)) {
+    result = result.split(entity).join(char);
+  }
+  result = result
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -163,8 +178,32 @@ function formatIbreviaryText(content: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)));
+  return result;
+}
 
-  // 7. Clean up whitespace
+function formatIbreviaryText(content: string): string {
+  let text = content;
+
+  text = text.replace(
+    /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi,
+    (_, name) => `\n\n${cleanHtml(name).toUpperCase()}\n`
+  );
+
+  text = text.replace(/<hr\s*\/?>/gi, '\n\n');
+
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/h1>/gi, '\n');
+  text = text.replace(/<\/p>/gi, '\n\n');
+  text = text.replace(/<\/div>/gi, '\n');
+
+  text = text.replace(/Ant\./g, '\nAnt. ');
+  text = text.replace(/℟\./g, '\n℟. ');
+  text = text.replace(/℣\./g, '\n℣. ');
+
+  text = text.replace(/<[^>]+>/g, '');
+
+  text = decodeEntities(text);
+
   text = text
     .replace(/\n{4,}/g, '\n\n\n')
     .replace(/[ \t]+\n/g, '\n')
@@ -172,6 +211,7 @@ function formatIbreviaryText(content: string): string {
     .replace(/^\s+|\s+$/gm, '')
     .replace(/\*\*\*\*\*\*/g, '')
     .replace(/- Menu -/g, '')
+    .replace(/DONATE.*?(?:SUBSCRIBE.*?)?$/s, '')
     .trim();
 
   return text;
@@ -526,4 +566,116 @@ export async function fetchExternalFeastInfo(date: string): Promise<ExternalFetc
     return { data: { feastEn: feastDesc || dateLabel, dateLabel }, source: 'iBreviary' };
   }
   return { data: null, source: 'none' };
+}
+
+// ─── Offline cache for pre-fetched days ───
+
+interface CacheEntry<T> {
+  data: T;
+  source: string;
+  cachedAt: number;
+}
+
+const CACHE_PREFIX = 'ext_cache_';
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+function getCacheKey(date: string, type: string): string {
+  return `${CACHE_PREFIX}${type}_${date}`;
+}
+
+function getCached<T>(date: string, type: string): CacheEntry<T> | null {
+  try {
+    const raw = localStorage.getItem(getCacheKey(date, type));
+    if (!raw) return null;
+    const entry: CacheEntry<T> = JSON.parse(raw);
+    if (Date.now() - entry.cachedAt > CACHE_TTL) {
+      localStorage.removeItem(getCacheKey(date, type));
+      return null;
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+function setCached<T>(date: string, type: string, data: T, source: string): void {
+  try {
+    const entry: CacheEntry<T> = { data, source, cachedAt: Date.now() };
+    localStorage.setItem(getCacheKey(date, type), JSON.stringify(entry));
+  } catch {
+    // localStorage might be full
+  }
+}
+
+export function getCachedReadings(date: string): LiturgicalDay | null {
+  const cached = getCached<LiturgicalDay>(date, 'readings');
+  return cached?.data || null;
+}
+
+export function getCachedSaint(date: string): Saint | null {
+  const cached = getCached<Saint>(date, 'saint');
+  return cached?.data || null;
+}
+
+export function getCachedPrayers(date: string): Prayer[] | null {
+  const cached = getCached<Prayer[]>(date, 'prayers');
+  return cached?.data || null;
+}
+
+export function getCachedOfficeReading(date: string): OfficeReading | null {
+  const cached = getCached<OfficeReading>(date, 'office');
+  return cached?.data || null;
+}
+
+export function updateCachedReadings(date: string, data: LiturgicalDay | null, source: string): void {
+  if (data) setCached(date, 'readings', data, source);
+}
+
+export function updateCachedSaint(date: string, data: Saint | null, source: string): void {
+  if (data) setCached(date, 'saint', data, source);
+}
+
+export function updateCachedPrayers(date: string, data: Prayer[] | null, source: string): void {
+  if (data && data.length > 0) setCached(date, 'prayers', data, source);
+}
+
+export function updateCachedOfficeReading(date: string, data: OfficeReading | null, source: string): void {
+  if (data) setCached(date, 'office', data, source);
+}
+
+function getDatesForPrefetch(count: number): string[] {
+  const dates: string[] = [];
+  const today = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+export async function prefetchNextDays(count: number = 7): Promise<void> {
+  const dates = getDatesForPrefetch(count);
+  const results: PromiseSettledResult<void>[] = await Promise.allSettled(
+    dates.map(async (date) => {
+      if (getCachedReadings(date) && getCachedSaint(date) && getCachedPrayers(date)) return;
+
+      const [readingsResult, saintResult, prayersResult, officeResult] = await Promise.all([
+        fetchExternalReadings(date),
+        fetchExternalSaint(date),
+        fetchExternalPrayers(date),
+        fetchExternalOfficeReading(date),
+      ]);
+
+      updateCachedReadings(date, readingsResult.data, readingsResult.source);
+      updateCachedSaint(date, saintResult.data, saintResult.source);
+      updateCachedPrayers(date, prayersResult.data, prayersResult.source);
+      updateCachedOfficeReading(date, officeResult.data, officeResult.source);
+    })
+  );
+
+  const failed = results.filter(r => r.status === 'rejected').length;
+  if (failed > 0) {
+    console.warn(`[prefetch] ${failed}/${dates.length} days failed to prefetch`);
+  }
 }
