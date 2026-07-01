@@ -34,6 +34,7 @@ import { RosarySection } from './components/RosarySection';
 import { PdfReader } from './components/PdfReader';
 import { supabase, onAuthStateChange, getAdminEmail } from './supabase';
 import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements, deletePdfDocument } from './supabase';
+import { fetchExternalReadings, fetchExternalSaint } from './externalSource';
 
 export default function App() {
   // --- STATE LAYER ---
@@ -47,6 +48,9 @@ export default function App() {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [pdfDocuments, setPdfDocuments] = useState<PdfDocument[]>([]);
+  const [externalReadings, setExternalReadings] = useState<LiturgicalDay | null>(null);
+  const [externalSourceLabel, setExternalSourceLabel] = useState<string>('');
+  const [isLoadingExternal, setIsLoadingExternal] = useState(false);
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
   const [autoOpenPdfId, setAutoOpenPdfId] = useState<string | null>(null);
@@ -232,6 +236,42 @@ export default function App() {
       }
     }
   }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments]);
+
+  // Fetch readings from external source (USCCB) when date changes
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setIsLoadingExternal(true);
+      setExternalSourceLabel('');
+      const [readingsResult, saintResult] = await Promise.all([
+        fetchExternalReadings(selectedDate),
+        fetchExternalSaint(selectedDate),
+      ]);
+      if (cancelled) return;
+      setIsLoadingExternal(false);
+      if (readingsResult.data) {
+        setExternalReadings(readingsResult.data);
+        setExternalSourceLabel(readingsResult.source);
+        setLiturgicalDays(prev => {
+          const existing = prev.find(d => d.date === selectedDate);
+          if (existing) return prev;
+          return [readingsResult.data!, ...prev];
+        });
+      }
+      if (saintResult.data) {
+        setSaints(prev => {
+          const existing = prev.find(s => s.feastDate === saintResult.data!.feastDate);
+          if (existing) return prev;
+          return [...prev, saintResult.data!];
+        });
+      }
+      if (!readingsResult.data && !saintResult.data) {
+        setExternalSourceLabel('');
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedDate]);
 
   // Automatically update layout mode on resizing or orienting
   useEffect(() => {
@@ -1897,19 +1937,97 @@ export default function App() {
                                     d => d.category === selectedPrayerCategory && d.date === selectedDate && d.language !== userSettings.language
                                   );
                                   if (!pdf && !pdfOtherLang) {
+                                    if (selectedPrayerCategory === 'saints') {
+                                      const monthDay = selectedDate.substring(5);
+                                      const saint = saints.find(s => s.feastDate === monthDay);
+                                      if (saint) {
+                                        return (
+                                          <div className="space-y-3 text-left w-full">
+                                            <div className="p-4 rounded-xl bg-white dark:bg-stone-900 border border-amber-100/50 dark:border-amber-900/20">
+                                              <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'இன்றைய புனிதர்' : 'Saint of the Day'}</span>
+                                              <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1">{userSettings.language === 'ta' ? saint.nameTa : saint.nameEn}</h3>
+                                              <p className="text-xs text-slate-500 dark:text-stone-400 mt-1">{saint.feastDate}</p>
+                                              <p className="text-sm leading-relaxed mt-3 text-slate-700 dark:text-stone-300">{userSettings.language === 'ta' ? saint.lifeHistoryTa : saint.lifeHistoryEn}</p>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                    }
+                                    if (selectedPrayerCategory === 'office' || selectedPrayerCategory === 'readings') {
+                                      const day = liturgicalDays.find(d => d.date === selectedDate) || externalReadings;
+                                      if (day) {
+                                        const isExternal = externalReadings?.date === selectedDate && externalSourceLabel;
+                                        return (
+                                          <div className="space-y-3 text-left w-full">
+                                            {isExternal && (
+                                              <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest block text-center">Source: {externalSourceLabel}</span>
+                                            )}
+                                            {day.readingFirstEn && (
+                                              <div className="p-3 rounded-xl bg-white dark:bg-stone-900 border border-slate-100 dark:border-stone-800">
+                                                <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'முதல் வாசகம்' : 'First Reading'}</span>
+                                                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">{day.readingFirstRefEn}</span>
+                                                <p className="text-sm leading-relaxed">{userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn}</p>
+                                              </div>
+                                            )}
+                                            {day.psalmEn && (
+                                              <div className="p-3 rounded-xl bg-white dark:bg-stone-900 border border-slate-100 dark:border-stone-800">
+                                                <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'பதிலுரைத் திருப்பாடல்' : 'Responsorial Psalm'}</span>
+                                                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">{day.psalmRefEn}</span>
+                                                <p className="text-sm leading-relaxed italic">{userSettings.language === 'ta' ? day.psalmTa : day.psalmEn}</p>
+                                              </div>
+                                            )}
+                                            {day.gospelEn && (
+                                              <div className="p-3 rounded-xl bg-white dark:bg-stone-900 border border-rose-100 dark:border-rose-900/20">
+                                                <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'நற்செய்தி' : 'Gospel'}</span>
+                                                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">{day.gospelRefEn}</span>
+                                                <p className="text-sm leading-relaxed">{userSettings.language === 'ta' ? day.gospelTa : day.gospelEn}</p>
+                                              </div>
+                                            )}
+                                            {selectedPrayerCategory === 'office' && day.officeEn && (
+                                              <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/20">
+                                                <span className="text-[9px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'வாசகங்கள் வழிபாடு' : 'Office of Readings'}</span>
+                                                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">{day.officeRefEn}</span>
+                                                <p className="text-sm leading-relaxed">{userSettings.language === 'ta' ? day.officeTa : day.officeEn}</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+                                    }
+                                    if (selectedPrayerCategory === 'morning' || selectedPrayerCategory === 'noon' || selectedPrayerCategory === 'evening' || selectedPrayerCategory === 'night') {
+                                      const prayer = prayers.find(p => p.category === selectedPrayerCategory);
+                                      if (prayer) {
+                                        return (
+                                          <div className="space-y-3 text-left w-full">
+                                            <div className="p-4 rounded-xl bg-white dark:bg-stone-900 border border-amber-100/50 dark:border-amber-900/20">
+                                              <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'இன்றைய செபம்' : "Today's Prayer"}</span>
+                                              <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1">{userSettings.language === 'ta' ? prayer.titleTa : prayer.titleEn}</h3>
+                                              <div className="h-px bg-slate-100 dark:bg-stone-800 my-3" />
+                                              <p className="text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-stone-300">{userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn}</p>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                    }
                                     return (
                                       <div className="space-y-2">
                                         <FileText size={40} className="mx-auto text-amber-300 dark:text-amber-600/40" />
                                         <p className="text-sm font-bold text-slate-500 dark:text-stone-400">
                                           {userSettings.language === 'ta' 
-                                            ? `${selectedDate} - இந்த நாளுக்கான PDF ஏற்றப்படவில்லை`
-                                            : `No PDF uploaded for ${selectedDate}`}
+                                            ? `இந்த நாளுக்கான தரவு எதுவும் இல்லை - வேறு தேதியைத் தேர்ந்தெடுக்கவும்`
+                                            : `No data available for ${selectedDate} - Select another date`}
                                         </p>
                                         <p className="text-xs text-slate-400">
                                           {userSettings.language === 'ta'
-                                            ? 'நிர்வாகி குழு PDF ஐப் பதிவேற்றும் வரை காத்திருக்கவும்'
-                                            : 'Wait for the admin to upload PDFs for this date'}
+                                            ? 'PDF ஏற்றப்படவில்லை அல்லது வெளிப்புற மூலத்திலிருந்து தரவு கிடைக்கவில்லை'
+                                            : 'No PDF uploaded and no external data found for this date'}
                                         </p>
+                                        {isLoadingExternal && (
+                                          <div className="flex items-center justify-center gap-2 text-xs text-amber-600">
+                                            <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                                            <span>{userSettings.language === 'ta' ? 'வெளிப்புற மூலத்திலிருந்து தரவு பெறப்படுகிறது...' : 'Fetching from external source...'}</span>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   }

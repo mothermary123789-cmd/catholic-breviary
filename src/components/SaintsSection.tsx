@@ -84,9 +84,16 @@ export const SaintsSection: React.FC<SaintsSectionProps> = ({
           <Sparkles size={36} className="mb-2 text-slate-300" />
           <p className="text-sm">
             {language === 'ta'
-              ? 'புனிதர்கள் யாரும் காணப்படவில்லை.'
+              ? 'இந்தத் தேடலுக்குப் பொருந்தும் புனிதர்கள் யாரும் இல்லை.'
               : 'No saints match your search query.'}
           </p>
+          {!searchQuery && saints.length === 0 && (
+            <p className="text-xs text-slate-500 mt-2 max-w-xs">
+              {language === 'ta'
+                ? 'வேறு தேதியைத் தேர்ந்தெடுக்க நாட்காட்டி தாவலுக்குச் செல்லவும் அல்லது நிர்வாகி புனிதர்களைச் சேர்க்கும் வரை காத்திருக்கவும்.'
+                : 'Try selecting a different date in the Calendar tab, or wait for an admin to add saints.'}
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-4 overflow-y-auto pr-1 flex-1" style={{ maxHeight: '60vh' }}>

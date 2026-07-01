@@ -22,6 +22,7 @@ interface CalendarSectionProps {
   prayers?: Prayer[];
   saints?: Saint[];
   officeReadings?: OfficeReading[];
+  externalSourceLabel?: string;
 }
 
 type SubTabType = 'readings' | 'prayers' | 'saint' | 'office';
@@ -378,6 +379,7 @@ export function CalendarSection({
   prayers,
   saints,
   officeReadings = [],
+  externalSourceLabel = '',
 }: CalendarSectionProps) {
   // Today's real date string for highlighting
   const todayDateStr = (() => {
@@ -640,6 +642,9 @@ export function CalendarSection({
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight text-center">
             {language === 'ta' ? activeDay.feastTa : activeDay.feastEn}
           </h3>
+          {externalSourceLabel && (
+            <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest block text-center">Source: {externalSourceLabel}</span>
+          )}
           {/* 4 Subtabs: Readings, Hours, Saint, Divine Office */}
           <div className="grid grid-cols-4 gap-1 bg-[#eae3d5]/70 dark:bg-[#1f1914] p-1 rounded-xl border border-amber-200/20 shrink-0 font-sans">
             {[
@@ -661,6 +666,17 @@ export function CalendarSection({
           {/* Dynamic Content */}
           <div className="space-y-4 overflow-y-auto pr-1 flex-1" id="daily-subtab-viewer-scroller">
             {activeSubTab === 'readings' && (
+              !activeDay.readingFirstEn && !activeDay.psalmEn && !activeDay.gospelEn ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 space-y-2">
+                  <BookOpen size={36} className="mx-auto text-amber-300/50" />
+                  <p className="text-sm font-bold text-slate-500 dark:text-stone-400">
+                    {language === 'ta' ? 'இந்த நாளுக்கான வாசகங்கள் எதுவும் இல்லை' : 'No readings available for this date'}
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-xs">
+                    {language === 'ta' ? 'வேறு தேதியைத் தேர்ந்தெடுக்கவும்' : 'Select a different date'}
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-3.5 animate-in fade-in duration-200">
                 <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/40">
                   <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block mb-0.5">{language === 'ta' ? 'முதல் வாசகம்' : 'First Reading'}</span>
@@ -678,7 +694,7 @@ export function CalendarSection({
                   <p className={`leading-relaxed font-serif whitespace-pre-wrap ${fontSizeClass}`}>{language === 'ta' ? activeDay.gospelTa : activeDay.gospelEn}</p>
                 </div>
               </div>
-            )}
+            ))}
             {activeSubTab === 'prayers' && (
               <div className="space-y-3.5 animate-in fade-in duration-200">
                 <div className="flex flex-wrap gap-1 bg-slate-100/80 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/40 mb-2">
