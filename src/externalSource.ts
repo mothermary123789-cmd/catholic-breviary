@@ -129,6 +129,54 @@ function extractIbreviaryDateLabel(html: string): string {
   return '';
 }
 
+function formatIbreviaryText(content: string): string {
+  let text = content;
+
+  // 1. Replace section headers with visible markers
+  text = text.replace(
+    /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi,
+    (_, name) => `\n\n  ◈ ${cleanHtml(name).toUpperCase()} ◈\n`
+  );
+
+  // 2. Replace <hr> with visible separators
+  text = text.replace(/<hr\s*\/?>/gi, '\n\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n');
+
+  // 3. Handle <br> and block-level tags as newlines
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/p>/gi, '\n\n');
+  text = text.replace(/<\/div>/gi, '\n');
+
+  // 4. Format antiphons and responses
+  text = text.replace(/Ant\./g, '\n    Ant. ');
+  text = text.replace(/℟\./g, '\n    ℟. ');
+  text = text.replace(/℣\./g, '\n    ℣. ');
+
+  // 5. Strip remaining HTML tags
+  text = text.replace(/<[^>]+>/g, '');
+
+  // 6. Clean entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)));
+
+  // 7. Clean up whitespace
+  text = text
+    .replace(/\n{4,}/g, '\n\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/^\s+|\s+$/gm, '')
+    .replace(/\*\*\*\*\*\*/g, '')
+    .replace(/- Menu -/g, '')
+    .trim();
+
+  return text;
+}
+
 function extractIbreviaryReadings(html: string): {
   firstReading: { ref: string; text: string } | null;
   psalm: { ref: string; text: string } | null;
@@ -169,17 +217,7 @@ function extractPrayerContent(html: string, sectionName: string): Prayer | null 
   const content = extractIbreviaryContent(html);
   const dateLabel = extractIbreviaryDateLabel(html);
 
-  const sections: string[] = [];
-  const partRegex = /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi;
-  let match;
-  while ((match = partRegex.exec(content)) !== null) {
-    sections.push(cleanHtml(match[1]));
-  }
-
-  let fullText = cleanHtml(content)
-    .replace(/\*\*\*\*\*\*/g, '')
-    .replace(/- Menu -/g, '')
-    .trim();
+  const fullText = formatIbreviaryText(content);
 
   const titleBySection: Record<string, string> = {
     lodi: 'Morning Prayer',
@@ -197,6 +235,8 @@ function extractPrayerContent(html: string, sectionName: string): Prayer | null 
   const hourLabel = titleBySection[sectionName] || sectionName;
   const category = categoryBySection[sectionName] || 'morning';
 
+  if (!fullText) return null;
+
   return {
     id: `ibreviary-${sectionName}-${Date.now()}`,
     category,
@@ -211,9 +251,6 @@ function extractPrayerContent(html: string, sectionName: string): Prayer | null 
 
 function extractOfficeReading(html: string, date: string): OfficeReading | null {
   const content = extractIbreviaryContent(html);
-  const sectionRegex = /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi;
-  let match;
-  let currentSection = '';
   let readingText = '';
   let readingRef = '';
 
@@ -224,7 +261,7 @@ function extractOfficeReading(html: string, date: string): OfficeReading | null 
     if (secName.includes('reading') || secName.includes('second reading')) {
       const refMatch = part.match(/<span\s+class="rubrica">(.*?)<\/span>/i);
       if (refMatch) readingRef = cleanHtml(refMatch[1]);
-      readingText = cleanHtml(part);
+      readingText = formatIbreviaryText(part);
       break;
     }
   }
@@ -243,18 +280,21 @@ function extractOfficeReading(html: string, date: string): OfficeReading | null 
 function extractSaintFromIbreviary(html: string, date: string): Saint | null {
   const content = extractIbreviaryContent(html);
   const feastDesc = extractIbreviaryFeastDesc(html);
+  const dateLabel = extractIbreviaryDateLabel(html);
 
-  if (feastDesc && (feastDesc.toLowerCase().includes('saint') || feastDesc.toLowerCase().includes('memorial'))) {
+  if (feastDesc && (feastDesc.toLowerCase().includes('saint') || feastDesc.toLowerCase().includes('memorial') || feastDesc.toLowerCase().includes('feast') || feastDesc.toLowerCase().includes('solemnity'))) {
     const monthDay = date.substring(5);
     const name = feastDesc.replace(/^(Optional )?(Memorial|Feast|Solemnity) of /i, '').trim();
     if (name && name.length < 100) {
+      const formattedContent = formatIbreviaryText(content);
+      const bioText = formattedContent.length > 50 ? formattedContent : `Feast observed: ${feastDesc}. Source: iBreviary.`;
       return {
         id: `ibreviary-saint-${monthDay}`,
         nameEn: name,
         nameTa: name,
         feastDate: monthDay,
-        lifeHistoryEn: `Feast observed: ${feastDesc}. Source: iBreviary.`,
-        lifeHistoryTa: `திருவிழா: ${feastDesc}. மூலம்: iBreviary.`,
+        lifeHistoryEn: `${feastDesc}\n\n${dateLabel}\n\n${bioText}`,
+        lifeHistoryTa: `${feastDesc}\n\n${dateLabel}\n\n${bioText}`,
       };
     }
   }
@@ -433,6 +473,12 @@ export async function fetchExternalSaint(date: string): Promise<ExternalFetchRes
   if (html) {
     const data = parseUsccbSaint(html, date);
     if (data) return { data, source: 'USCCB' };
+  }
+
+  html = await fetchIbreviarySection('santo', date);
+  if (html) {
+    const data = extractSaintFromIbreviary(html, date);
+    if (data) return { data, source: 'iBreviary' };
   }
 
   html = await fetchIbreviarySection('lodi', date);
