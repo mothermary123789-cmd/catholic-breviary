@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Lock, Unlock, Database, RefreshCw, Plus, Edit, Trash, Check, X, FileText, Calendar, Sparkles, Megaphone, Users, UserCheck, Trash2, Heart, BookOpen, Upload, File as FileIcon, Eye } from 'lucide-react';
+import { Lock, Unlock, Database, RefreshCw, Plus, Edit, Trash, Check, X, FileText, Calendar, Sparkles, Megaphone, Users, UserCheck, Trash2, Heart, BookOpen, Upload, Download, File as FileIcon, Eye } from 'lucide-react';
 import { Prayer, Saint, LiturgicalDay, PrayerCategory, AdBanner, ParishUser, Announcement, OfficeReading, PdfDocument } from '../types';
 import { supabase, uploadPdf, deletePdfDocument, getPdfStorageUrl } from '../supabase';
+import { RichTextEditor } from './RichTextEditor';
+import { fetchExternalPrayers, fetchExternalSaint, fetchExternalReadings, fetchExternalOfficeReading } from '../externalSource';
 
 interface AdminPanelProps {
   prayers: Prayer[];
@@ -105,6 +107,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
   const [isAnnFormOpen, setIsAnnFormOpen] = useState(false);
 
+  // Supabase connection test state
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
   // PDF upload state
   const [pdfDate, setPdfDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [pdfCategory, setPdfCategory] = useState<'morning' | 'noon' | 'evening' | 'night' | 'office' | 'saints' | 'readings'>('morning');
@@ -114,6 +120,113 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isPdfUploading, setIsPdfUploading] = useState(false);
   const [pdfUploadError, setPdfUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // iBreviary fetch state
+  const [fetchDate, setFetchDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isFetchingPrayers, setIsFetchingPrayers] = useState(false);
+  const [isFetchingSaint, setIsFetchingSaint] = useState(false);
+  const [isFetchingReadings, setIsFetchingReadings] = useState(false);
+  const [isFetchingOffice, setIsFetchingOffice] = useState(false);
+
+  // iBreviary fetch handlers
+  const handleFetchPrayers = async () => {
+    setIsFetchingPrayers(true);
+    try {
+      const result = await fetchExternalPrayers(fetchDate);
+      if (result.data && result.data.length > 0) {
+        for (const p of result.data) {
+          onSavePrayer(p);
+        }
+        alert(`Fetched ${result.data.length} prayers for ${fetchDate} from iBreviary. Click Edit to review and modify.`);
+      } else {
+        alert('No prayers found for this date on iBreviary.');
+      }
+    } catch (err) {
+      alert('Failed to fetch prayers from iBreviary.');
+    }
+    setIsFetchingPrayers(false);
+  };
+
+  const handleFetchSaint = async () => {
+    setIsFetchingSaint(true);
+    try {
+      const result = await fetchExternalSaint(fetchDate);
+      if (result.data) {
+        const saint = result.data;
+        setEditingSaint({
+          ...saint,
+          isCustom: true,
+        });
+        setIsFormOpen(true);
+      } else {
+        alert('No saint found for this date on iBreviary.');
+      }
+    } catch (err) {
+      alert('Failed to fetch saint from iBreviary.');
+    }
+    setIsFetchingSaint(false);
+  };
+
+  const handleFetchReadings = async () => {
+    setIsFetchingReadings(true);
+    try {
+      const result = await fetchExternalReadings(fetchDate);
+      if (result.data) {
+        const day = result.data;
+        setEditingDay({
+          date: fetchDate,
+          seasonEn: day.seasonEn || 'Ordinary Time',
+          seasonTa: day.seasonTa || 'சாதாரண காலம்',
+          color: day.color || 'green',
+          feastEn: day.feastEn || '',
+          feastTa: day.feastTa || '',
+          readingFirstRefEn: day.readingFirstRefEn || '',
+          readingFirstRefTa: day.readingFirstRefTa || '',
+          readingFirstEn: day.readingFirstEn || '',
+          readingFirstTa: day.readingFirstTa || '',
+          psalmRefEn: day.psalmRefEn || '',
+          psalmRefTa: day.psalmRefTa || '',
+          psalmEn: day.psalmEn || '',
+          psalmTa: day.psalmTa || '',
+          gospelRefEn: day.gospelRefEn || '',
+          gospelRefTa: day.gospelRefTa || '',
+          gospelEn: day.gospelEn || '',
+          gospelTa: day.gospelTa || '',
+          officeRefEn: day.officeRefEn || '',
+          officeRefTa: day.officeRefTa || '',
+          officeEn: day.officeEn || '',
+          officeTa: day.officeTa || '',
+          isCustom: true,
+        });
+        setIsFormOpen(true);
+      } else {
+        alert('No readings found for this date on iBreviary.');
+      }
+    } catch (err) {
+      alert('Failed to fetch readings from iBreviary.');
+    }
+    setIsFetchingReadings(false);
+  };
+
+  const handleFetchOfficeReading = async () => {
+    setIsFetchingOffice(true);
+    try {
+      const result = await fetchExternalOfficeReading(fetchDate);
+      if (result.data) {
+        const reading = result.data;
+        setEditingOfficeReading({
+          ...reading,
+          isCustom: true,
+        });
+        setIsFormOpen(true);
+      } else {
+        alert('No office reading found for this date on iBreviary.');
+      }
+    } catch (err) {
+      alert('Failed to fetch office reading from iBreviary.');
+    }
+    setIsFetchingOffice(false);
+  };
 
   const handleSubmitAnnouncement = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,6 +304,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleTestSupabase = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionInfo = session?.user
+        ? `Auth: Logged in as ${session.user.email || session.user.id}`
+        : 'Auth: Not logged in (anon)';
+      const { count, error: countError } = await supabase
+        .from('prayers')
+        .select('*', { count: 'exact', head: true });
+      if (countError) throw countError;
+      setTestResult(`✅ Connected | ${sessionInfo} | Prayers table has ${count} rows`);
+    } catch (err: any) {
+      setTestResult(`❌ Failed: ${err?.message || err}. Check Supabase URL, anon key, and that the table exists.`);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   // Safe form close
   const closeForm = () => {
     setIsFormOpen(false);
@@ -204,7 +337,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // 1. PRAYER SUBMISSION HELPERS
   const triggerAddPrayer = () => {
     setEditingPrayer({
-      id: `prayer-${Date.now()}`,
+      id: crypto.randomUUID(),
+      date: new Date().toISOString().split('T')[0],
       category: 'morning',
       titleEn: '',
       titleTa: '',
@@ -230,7 +364,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // 2. SAINT SUBMISSION HELPERS
   const triggerAddSaint = () => {
     setEditingSaint({
-      id: `saint-${Date.now()}`,
+      id: crypto.randomUUID(),
       feastDate: '01-01',
       nameEn: '',
       nameTa: '',
@@ -299,7 +433,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // 4. OFFICE READING HELPERS
   const triggerAddOfficeReading = () => {
     setEditingOfficeReading({
-      id: `office-${Date.now()}`,
+      id: crypto.randomUUID(),
       refEn: '',
       refTa: '',
       textEn: '',
@@ -324,7 +458,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // 5. PARISHIONER PROFILE HELPERS
   const triggerAddParishUser = () => {
     setEditingParishUser({
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       fullName: '',
       email: '',
       phoneNumber: '',
@@ -481,7 +615,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <Database size={13} className="text-slate-500" />
             <span>Supabase</span>
           </span>
-
+          <button
+            onClick={handleTestSupabase}
+            disabled={isTesting}
+            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition"
+          >
+            {isTesting ? <RefreshCw size={12} className="animate-spin" /> : <Database size={12} />}
+            {isTesting ? 'Testing...' : 'Test Connection'}
+          </button>
+          {testResult && (
+            <span className={`w-full text-[10px] font-bold px-2 py-1 rounded-lg ${
+              testResult.startsWith('✅') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400'
+            }`}>
+              {testResult}
+            </span>
+          )}
         </div>
       </div>
 
@@ -539,14 +687,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
               </div>
 
+              {/* Fetch from iBreviary */}
+              <div className="flex items-center gap-2 p-2 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-500 shrink-0">Fetch from iBreviary:</span>
+                <input
+                  type="date"
+                  value={fetchDate}
+                  onChange={(e) => setFetchDate(e.target.value)}
+                  className="text-xs px-2 py-1 border rounded-lg bg-white dark:bg-stone-900 border-slate-200 dark:border-stone-800 text-slate-800 dark:text-slate-100 font-bold flex-1 max-w-[160px]"
+                />
+                <button
+                  onClick={handleFetchPrayers}
+                  disabled={isFetchingPrayers}
+                  className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/50 text-white px-3 py-1.5 rounded-lg"
+                >
+                  {isFetchingPrayers ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                  {isFetchingPrayers ? 'Fetching...' : 'Fetch All Prayers'}
+                </button>
+              </div>
+
               <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-2xl bg-white dark:bg-slate-930 border-slate-100 dark:border-slate-800/80 overflow-hidden">
-                {prayers.map((prayer) => (
+                {prayers.map((prayer) => {
+                  const hasPdf = pdfDocuments.some(
+                    d => d.date === prayer.date && d.category === prayer.category
+                  );
+                  return (
                   <div key={prayer.id} className="p-4 flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 dark:bg-slate-900 border px-1.5 py-0.5 rounded">
                           {prayer.category}
                         </span>
+                        {prayer.date && (
+                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">
+                            {prayer.date}
+                          </span>
+                        )}
+                        {hasPdf && (
+                          <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <FileText size={9} /> PDF
+                          </span>
+                        )}
                         <h4 className="text-sm font-bold text-slate-900 dark:text-slate-150 truncate">
                           {prayer.titleEn}
                         </h4>
@@ -573,7 +754,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -592,6 +774,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 >
                   <Plus size={12} />
                   Add New Saint
+                </button>
+              </div>
+
+              {/* Fetch Saint from iBreviary */}
+              <div className="flex items-center gap-2 p-2 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-500 shrink-0">Fetch from iBreviary:</span>
+                <input
+                  type="date"
+                  value={fetchDate}
+                  onChange={(e) => setFetchDate(e.target.value)}
+                  className="text-xs px-2 py-1 border rounded-lg bg-white dark:bg-stone-900 border-slate-200 dark:border-stone-800 text-slate-800 dark:text-slate-100 font-bold flex-1 max-w-[160px]"
+                />
+                <button
+                  onClick={handleFetchSaint}
+                  disabled={isFetchingSaint}
+                  className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/50 text-white px-3 py-1.5 rounded-lg"
+                >
+                  {isFetchingSaint ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                  {isFetchingSaint ? 'Fetching...' : 'Fetch Saint'}
                 </button>
               </div>
 
@@ -653,6 +854,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
               </div>
 
+              {/* Fetch Readings from iBreviary */}
+              <div className="flex items-center gap-2 p-2 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-500 shrink-0">Fetch from iBreviary:</span>
+                <input
+                  type="date"
+                  value={fetchDate}
+                  onChange={(e) => setFetchDate(e.target.value)}
+                  className="text-xs px-2 py-1 border rounded-lg bg-white dark:bg-stone-900 border-slate-200 dark:border-stone-800 text-slate-800 dark:text-slate-100 font-bold flex-1 max-w-[160px]"
+                />
+                <button
+                  onClick={handleFetchReadings}
+                  disabled={isFetchingReadings}
+                  className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/50 text-white px-3 py-1.5 rounded-lg"
+                >
+                  {isFetchingReadings ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                  {isFetchingReadings ? 'Fetching...' : 'Fetch Readings'}
+                </button>
+              </div>
+
               <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-2xl bg-white dark:bg-slate-930 border-slate-100 dark:border-slate-800/80 overflow-hidden">
                 {liturgicalDays.map((ld) => (
                   <div key={ld.date} className="p-4 flex items-center justify-between gap-4">
@@ -706,6 +926,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 >
                   <Plus size={12} />
                   Add Patristic Reading
+                </button>
+              </div>
+
+              {/* Fetch Office Reading from iBreviary */}
+              <div className="flex items-center gap-2 p-2 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-500 shrink-0">Fetch from iBreviary:</span>
+                <input
+                  type="date"
+                  value={fetchDate}
+                  onChange={(e) => setFetchDate(e.target.value)}
+                  className="text-xs px-2 py-1 border rounded-lg bg-white dark:bg-stone-900 border-slate-200 dark:border-stone-800 text-slate-800 dark:text-slate-100 font-bold flex-1 max-w-[160px]"
+                />
+                <button
+                  onClick={handleFetchOfficeReading}
+                  disabled={isFetchingOffice}
+                  className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/50 text-white px-3 py-1.5 rounded-lg"
+                >
+                  {isFetchingOffice ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                  {isFetchingOffice ? 'Fetching...' : 'Fetch Office'}
                 </button>
               </div>
 
@@ -1339,15 +1578,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           {/* Form: Prayers */}
           {editingPrayer && (
             <form onSubmit={submitPrayerForm} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Identifier Key</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Date</label>
                   <input
-                    type="text"
-                    value={editingPrayer.id}
-                    onChange={(e) => setEditingPrayer({ ...editingPrayer, id: e.target.value })}
-                    className="w-full p-2 border rounded-lg bg-slate-100 dark:bg-slate-950/50 text-slate-500"
-                    disabled
+                    type="date"
+                    value={editingPrayer.date || new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setEditingPrayer({ ...editingPrayer, date: e.target.value })}
+                    className="w-full p-2 border rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                    required
                   />
                 </div>
                 <div>
@@ -1364,7 +1603,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <option value="office">Office of Readings</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Identifier Key</label>
+                  <input
+                    type="text"
+                    value={editingPrayer.id}
+                    onChange={(e) => setEditingPrayer({ ...editingPrayer, id: e.target.value })}
+                    className="w-full p-2 border rounded-lg bg-slate-100 dark:bg-slate-950/50 text-slate-500"
+                    disabled
+                  />
+                </div>
               </div>
+
+              {/* PDF status for selected date + category */}
+              {(() => {
+                const existingPdf = pdfDocuments.find(
+                  d => d.date === editingPrayer.date && d.category === editingPrayer.category
+                );
+                if (existingPdf) {
+                  return (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 flex items-center gap-2">
+                      <FileText size={14} className="text-amber-600 shrink-0" />
+                      <span className="text-xs text-amber-800 dark:text-amber-300">
+                        PDF already uploaded for this date/category: <strong>{existingPdf.title}</strong> ({existingPdf.language === 'ta' ? 'தமிழ்' : 'EN'}). Users will see the PDF instead of text content.
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
+                    <FileText size={14} className="text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      No PDF uploaded for this date/category. Users will see the text content below.
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4 p-3 bg-white dark:bg-slate-950/20 border rounded-xl border-slate-150 dark:border-slate-800">
@@ -1391,11 +1665,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase text-slate-400 mb-0.5 font-bold">Prayer Content (EN)</label>
-                    <textarea
+                    <RichTextEditor
                       value={editingPrayer.contentEn || ''}
-                      onChange={(e) => setEditingPrayer({ ...editingPrayer, contentEn: e.target.value })}
-                      className="w-full p-2 border rounded-lg h-36 font-mono"
-                      required
+                      onChange={(val) => setEditingPrayer({ ...editingPrayer, contentEn: val })}
+                      minHeight="150px"
+                      placeholder="Enter prayer content in English..."
                     />
                   </div>
                 </div>
@@ -1424,11 +1698,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase text-slate-400 mb-0.5 font-bold">Prayer Content (TA)</label>
-                    <textarea
+                    <RichTextEditor
                       value={editingPrayer.contentTa || ''}
-                      onChange={(e) => setEditingPrayer({ ...editingPrayer, contentTa: e.target.value })}
-                      className="w-full p-2 border rounded-lg h-36 font-mono"
-                      required
+                      onChange={(val) => setEditingPrayer({ ...editingPrayer, contentTa: val })}
+                      minHeight="150px"
+                      placeholder="தமிழில் செபத்தை உள்ளிடுக..."
                     />
                   </div>
                 </div>
@@ -1486,11 +1760,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase text-slate-400 mb-0.5 font-bold">Saint Biography & History (EN)</label>
-                    <textarea
+                    <RichTextEditor
                       value={editingSaint.lifeHistoryEn || ''}
-                      onChange={(e) => setEditingSaint({ ...editingSaint, lifeHistoryEn: e.target.value })}
-                      className="w-full p-2 border rounded-lg h-44"
-                      required
+                      onChange={(val) => setEditingSaint({ ...editingSaint, lifeHistoryEn: val })}
+                      minHeight="150px"
+                      placeholder="Enter saint biography in English..."
                     />
                   </div>
                 </div>
@@ -1510,11 +1784,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase text-slate-400 mb-0.5 font-bold">Saint Biography & History (TA)</label>
-                    <textarea
+                    <RichTextEditor
                       value={editingSaint.lifeHistoryTa || ''}
-                      onChange={(e) => setEditingSaint({ ...editingSaint, lifeHistoryTa: e.target.value })}
-                      className="w-full p-2 border rounded-lg h-44"
-                      required
+                      onChange={(val) => setEditingSaint({ ...editingSaint, lifeHistoryTa: val })}
+                      minHeight="150px"
+                      placeholder="தமிழில் புனிதர் வரலாற்றை உள்ளிடுக..."
                     />
                   </div>
                 </div>
@@ -1632,19 +1906,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <textarea
-                      placeholder="First Reading Scripture text in English..."
+                    <RichTextEditor
                       value={editingDay.readingFirstEn || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, readingFirstEn: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, readingFirstEn: val })}
+                      minHeight="80px"
+                      placeholder="First Reading Scripture text in English..."
                     />
-                    <textarea
-                      placeholder="முதல் வாசகம் தமிழ் உரை..."
+                    <RichTextEditor
                       value={editingDay.readingFirstTa || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, readingFirstTa: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, readingFirstTa: val })}
+                      minHeight="80px"
+                      placeholder="முதல் வாசகம் தமிழ் உரை..."
                     />
                   </div>
                 </div>
@@ -1671,19 +1943,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <textarea
-                      placeholder="Psalm response and verses..."
+                    <RichTextEditor
                       value={editingDay.psalmEn || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, psalmEn: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, psalmEn: val })}
+                      minHeight="80px"
+                      placeholder="Psalm response and verses..."
                     />
-                    <textarea
-                      placeholder="பதிலுரைத் திருப்பாடல் தமிழ் உரை..."
+                    <RichTextEditor
                       value={editingDay.psalmTa || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, psalmTa: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, psalmTa: val })}
+                      minHeight="80px"
+                      placeholder="பதிலுரைத் திருப்பாடல் தமிழ் உரை..."
                     />
                   </div>
                 </div>
@@ -1710,19 +1980,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <textarea
-                      placeholder="Gospel Scripture readings..."
+                    <RichTextEditor
                       value={editingDay.gospelEn || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, gospelEn: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, gospelEn: val })}
+                      minHeight="80px"
+                      placeholder="Gospel Scripture readings..."
                     />
-                    <textarea
-                      placeholder="நற்செய்தி வசனங்கள்..."
+                    <RichTextEditor
                       value={editingDay.gospelTa || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, gospelTa: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-20"
-                      required
+                      onChange={(val) => setEditingDay({ ...editingDay, gospelTa: val })}
+                      minHeight="80px"
+                      placeholder="நற்செய்தி வசனங்கள்..."
                     />
                   </div>
                 </div>
@@ -1747,17 +2015,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <textarea
-                      placeholder="Office of Readings text in English..."
+                    <RichTextEditor
                       value={editingDay.officeEn || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, officeEn: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-24 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 text-xs font-sans"
+                      onChange={(val) => setEditingDay({ ...editingDay, officeEn: val })}
+                      minHeight="80px"
+                      placeholder="Office of Readings text in English..."
                     />
-                    <textarea
-                      placeholder="வாசகங்களின் வழிபாட்டு உரை (தமிழ்)..."
+                    <RichTextEditor
                       value={editingDay.officeTa || ''}
-                      onChange={(e) => setEditingDay({ ...editingDay, officeTa: e.target.value })}
-                      className="p-2 border rounded-lg w-full h-24 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 text-xs font-sans"
+                      onChange={(val) => setEditingDay({ ...editingDay, officeTa: val })}
+                      minHeight="80px"
+                      placeholder="வாசகங்களின் வழிபாட்டு உரை (தமிழ்)..."
                     />
                   </div>
                 </div>
@@ -1805,22 +2073,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase text-slate-400 mb-1 font-bold">Text (EN)</label>
-                  <textarea
+                  <RichTextEditor
                     value={editingOfficeReading.textEn || ''}
-                    onChange={(e) => setEditingOfficeReading({ ...editingOfficeReading, textEn: e.target.value })}
+                    onChange={(val) => setEditingOfficeReading({ ...editingOfficeReading, textEn: val })}
+                    minHeight="100px"
                     placeholder="Patristic reading text in English..."
-                    className="w-full p-2 border rounded-lg bg-white dark:bg-slate-950 h-24"
-                    required
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase text-slate-400 mb-1 font-bold">Text (TA)</label>
-                  <textarea
+                  <RichTextEditor
                     value={editingOfficeReading.textTa || ''}
-                    onChange={(e) => setEditingOfficeReading({ ...editingOfficeReading, textTa: e.target.value })}
+                    onChange={(val) => setEditingOfficeReading({ ...editingOfficeReading, textTa: val })}
+                    minHeight="100px"
                     placeholder="துறவி முதல்வர்களின் வாசகம் தமிழில்..."
-                    className="w-full p-2 border rounded-lg bg-white dark:bg-slate-950 h-24"
-                    required
                   />
                 </div>
               </div>

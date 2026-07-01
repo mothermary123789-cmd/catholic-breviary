@@ -66,9 +66,9 @@ export async function isAdminAuthenticated(): Promise<boolean> {
   return !!session;
 }
 
-export function getAdminEmailSync(): string | null {
-  const session = supabase.auth.getSession();
-  return null;
+export async function getAdminEmailSync(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.email || null;
 }
 
 export async function getAdminEmail(): Promise<string | null> {
@@ -98,9 +98,10 @@ export async function fetchPrayers(): Promise<Prayer[]> {
   return data.map(r => mapPrayerFromDb(r));
 }
 
-function mapPrayerFromDb(r: any): Prayer {
+export function mapPrayerFromDb(r: any): Prayer {
   return {
     id: r.id,
+    date: r.date || '',
     category: r.category,
     titleEn: r.title_en,
     titleTa: r.title_ta,
@@ -114,6 +115,7 @@ function mapPrayerFromDb(r: any): Prayer {
 
 function mapPrayerToDb(prayer: Prayer): any {
   return {
+    date: prayer.date,
     category: prayer.category,
     title_en: prayer.titleEn,
     title_ta: prayer.titleTa,
@@ -126,18 +128,14 @@ function mapPrayerToDb(prayer: Prayer): any {
 }
 
 export async function savePrayer(prayer: Prayer): Promise<void> {
-  const dbData = mapPrayerToDb(prayer);
-  if (prayer.id && prayer.id.length >= 15) {
-    const { error } = await supabase.from('prayers').update(dbData).eq('id', prayer.id);
-    if (error && error.code !== 'PGRST116') throw error;
-  } else {
-    const { error: insertError } = await supabase.from('prayers').insert(dbData);
-    if (insertError) throw insertError;
-  }
+  const dbData = { id: prayer.id, ...mapPrayerToDb(prayer) };
+  const { error } = await supabase.from('prayers').upsert(dbData, { onConflict: 'date,category' });
+  if (error) throw error;
 }
 
 export async function deletePrayer(id: string): Promise<void> {
-  await supabase.from('prayers').delete().eq('id', id);
+  const { error } = await supabase.from('prayers').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Saints ---
@@ -151,7 +149,7 @@ export async function fetchSaints(): Promise<Saint[]> {
   return data.map(r => mapSaintFromDb(r));
 }
 
-function mapSaintFromDb(r: any): Saint {
+export function mapSaintFromDb(r: any): Saint {
   return {
     id: r.id,
     nameEn: r.name_en,
@@ -177,16 +175,14 @@ function mapSaintToDb(saint: Saint): any {
 }
 
 export async function saveSaint(saint: Saint): Promise<void> {
-  const dbData = mapSaintToDb(saint);
-  if (saint.id && saint.id.length >= 15) {
-    await supabase.from('saints').update(dbData).eq('id', saint.id);
-  } else {
-    await supabase.from('saints').insert(dbData);
-  }
+  const dbData = { id: saint.id, ...mapSaintToDb(saint) };
+  const { error } = await supabase.from('saints').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteSaint(id: string): Promise<void> {
-  await supabase.from('saints').delete().eq('id', id);
+  const { error } = await supabase.from('saints').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Liturgical Days ---
@@ -200,7 +196,7 @@ export async function fetchLiturgicalDays(): Promise<LiturgicalDay[]> {
   return data.map(r => mapLiturgicalDayFromDb(r));
 }
 
-function mapLiturgicalDayFromDb(r: any): LiturgicalDay {
+export function mapLiturgicalDayFromDb(r: any): LiturgicalDay {
   return {
     id: r.id,
     date: r.date,
@@ -232,6 +228,7 @@ function mapLiturgicalDayFromDb(r: any): LiturgicalDay {
 export async function saveLiturgicalDay(day: LiturgicalDay): Promise<void> {
   const { date, ...rest } = day;
   const dbData = {
+    id: day.id,
     date,
     season_en: rest.seasonEn,
     season_ta: rest.seasonTa,
@@ -256,16 +253,13 @@ export async function saveLiturgicalDay(day: LiturgicalDay): Promise<void> {
     office_ta: rest.officeTa,
     is_custom: rest.isCustom,
   };
-  const existing = await supabase.from('liturgical_days').select('id').eq('date', date).maybeSingle();
-  if (existing.data) {
-    await supabase.from('liturgical_days').update(dbData).eq('id', existing.data.id);
-  } else {
-    await supabase.from('liturgical_days').insert(dbData);
-  }
+  const { error } = await supabase.from('liturgical_days').upsert(dbData, { onConflict: 'date' });
+  if (error) throw error;
 }
 
 export async function deleteLiturgicalDay(date: string): Promise<void> {
-  await supabase.from('liturgical_days').delete().eq('date', date);
+  const { error } = await supabase.from('liturgical_days').delete().eq('date', date);
+  if (error) throw error;
 }
 
 // --- Office Readings ---
@@ -279,7 +273,7 @@ export async function fetchOfficeReadings(): Promise<OfficeReading[]> {
   return data.map(r => mapOfficeReadingFromDb(r));
 }
 
-function mapOfficeReadingFromDb(r: any): OfficeReading {
+export function mapOfficeReadingFromDb(r: any): OfficeReading {
   return {
     id: r.id,
     refEn: r.ref_en,
@@ -291,22 +285,20 @@ function mapOfficeReadingFromDb(r: any): OfficeReading {
 }
 
 export async function saveOfficeReading(reading: OfficeReading): Promise<void> {
-  const dbData = {
+  const dbData = { id: reading.id, ...{
     ref_en: reading.refEn,
     ref_ta: reading.refTa,
     text_en: reading.textEn,
     text_ta: reading.textTa,
     is_custom: reading.isCustom,
-  };
-  if (reading.id && reading.id.length >= 15) {
-    await supabase.from('office_readings').update(dbData).eq('id', reading.id);
-  } else {
-    await supabase.from('office_readings').insert(dbData);
-  }
+  }};
+  const { error } = await supabase.from('office_readings').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteOfficeReading(id: string): Promise<void> {
-  await supabase.from('office_readings').delete().eq('id', id);
+  const { error } = await supabase.from('office_readings').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Journal Entries ---
@@ -329,21 +321,20 @@ export async function fetchJournalEntries(userId: string): Promise<JournalEntry[
 
 export async function saveJournalEntry(userId: string, entry: JournalEntry): Promise<void> {
   const dbData = {
+    id: entry.id,
     user_id: userId,
     date: entry.date,
     title: entry.title,
     reflection: entry.reflection,
     associated_prayer_id: entry.associatedPrayerId,
   };
-  if (entry.id && entry.id.length >= 15) {
-    await supabase.from('journal_entries').update(dbData).eq('id', entry.id);
-  } else {
-    await supabase.from('journal_entries').insert(dbData);
-  }
+  const { error } = await supabase.from('journal_entries').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteJournalEntry(id: string): Promise<void> {
-  await supabase.from('journal_entries').delete().eq('id', id);
+  const { error } = await supabase.from('journal_entries').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Bookmarks ---
@@ -366,21 +357,20 @@ export async function fetchBookmarks(userId: string): Promise<Bookmark[]> {
 
 export async function saveBookmark(userId: string, bookmark: Bookmark): Promise<void> {
   const dbData = {
+    id: bookmark.id,
     user_id: userId,
     item_type: bookmark.itemType,
     item_id: bookmark.itemId,
     title_en: bookmark.titleEn,
     title_ta: bookmark.titleTa,
   };
-  if (bookmark.id && bookmark.id.length >= 15) {
-    await supabase.from('bookmarks').update(dbData).eq('id', bookmark.id);
-  } else {
-    await supabase.from('bookmarks').insert(dbData);
-  }
+  const { error } = await supabase.from('bookmarks').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
-  await supabase.from('bookmarks').delete().eq('id', id);
+  const { error } = await supabase.from('bookmarks').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- PDF Documents ---
@@ -523,8 +513,10 @@ export async function uploadPdf(
 }
 
 export async function deletePdfDocument(id: string, filePath: string): Promise<void> {
-  await supabase.storage.from('pdfs').remove([filePath]);
-  await supabase.from('pdf_documents').delete().eq('id', id);
+  const { error: storageError } = await supabase.storage.from('pdfs').remove([filePath]);
+  if (storageError) console.warn('Storage remove failed:', storageError);
+  const { error } = await supabase.from('pdf_documents').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Announcements ---
@@ -549,6 +541,7 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
 
 export async function saveAnnouncement(ann: Announcement): Promise<void> {
   const dbData = {
+    id: ann.id,
     title_en: ann.titleEn,
     title_ta: ann.titleTa,
     desc_en: ann.descEn,
@@ -557,15 +550,13 @@ export async function saveAnnouncement(ann: Announcement): Promise<void> {
     category: ann.category,
     theme: ann.theme,
   };
-  if (ann.id && ann.id.length >= 15) {
-    await supabase.from('announcements').update(dbData).eq('id', ann.id);
-  } else {
-    await supabase.from('announcements').insert(dbData);
-  }
+  const { error } = await supabase.from('announcements').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteAnnouncement(id: string): Promise<void> {
-  await supabase.from('announcements').delete().eq('id', id);
+  const { error } = await supabase.from('announcements').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Parish Users ---
@@ -588,21 +579,20 @@ export async function fetchParishUsers(): Promise<ParishUser[]> {
 
 export async function saveParishUser(user: ParishUser): Promise<void> {
   const dbData = {
+    id: user.id,
     full_name: user.fullName,
     email: user.email,
     phone_number: user.phoneNumber,
     role: user.role,
     registered_date: user.registeredDate,
   };
-  if (user.id && user.id.length >= 15) {
-    await supabase.from('parish_users').update(dbData).eq('id', user.id);
-  } else {
-    await supabase.from('parish_users').insert(dbData);
-  }
+  const { error } = await supabase.from('parish_users').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteParishUser(id: string): Promise<void> {
-  await supabase.from('parish_users').delete().eq('id', id);
+  const { error } = await supabase.from('parish_users').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // --- Ad Banner ---
@@ -630,6 +620,7 @@ export async function fetchAdBanner(): Promise<AdBanner | null> {
 
 export async function saveAdBanner(banner: AdBanner): Promise<void> {
   const dbData = {
+    id: banner.id,
     active: banner.active,
     title_en: banner.titleEn,
     title_ta: banner.titleTa,
@@ -638,78 +629,103 @@ export async function saveAdBanner(banner: AdBanner): Promise<void> {
     link_url: banner.linkUrl,
     theme: banner.theme,
   };
-  if (banner.id && banner.id.length >= 15) {
-    await supabase.from('ad_banners').update(dbData).eq('id', banner.id);
-  } else {
-    await supabase.from('ad_banners').insert(dbData);
-  }
+  const { error } = await supabase.from('ad_banners').upsert(dbData, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 // --- Realtime Subscriptions ---
 
-export function subscribePrayers(callback: (action: string, record: any) => void): () => void {
+export function subscribePrayers(callback: (action: string, record: Prayer) => void): () => void {
   const channel = supabase
     .channel('prayers-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'prayers' },
       (payload) => {
-        callback(payload.eventType, payload.new);
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, mapPrayerFromDb(raw));
       }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
 
-export function subscribeSaints(callback: (action: string, record: any) => void): () => void {
+export function subscribeSaints(callback: (action: string, record: Saint) => void): () => void {
   const channel = supabase
     .channel('saints-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'saints' },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, mapSaintFromDb(raw));
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
 
-export function subscribeLiturgicalDays(callback: (action: string, record: any) => void): () => void {
+export function subscribeLiturgicalDays(callback: (action: string, record: LiturgicalDay) => void): () => void {
   const channel = supabase
     .channel('liturgical-days-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'liturgical_days' },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, mapLiturgicalDayFromDb(raw));
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
 
-export function subscribeOfficeReadings(callback: (action: string, record: any) => void): () => void {
+export function subscribeOfficeReadings(callback: (action: string, record: OfficeReading) => void): () => void {
   const channel = supabase
     .channel('office-readings-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'office_readings' },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, mapOfficeReadingFromDb(raw));
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
 
-export function subscribeJournalEntries(userId: string, callback: (action: string, record: any) => void): () => void {
+export function subscribeJournalEntries(userId: string, callback: (action: string, record: JournalEntry) => void): () => void {
   const channel = supabase
     .channel('journal-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'journal_entries', filter: `user_id=eq.${userId}` },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = (payload.new || payload.old) as any;
+        callback(payload.eventType, {
+          id: raw.id,
+          date: raw.date,
+          title: raw.title,
+          reflection: raw.reflection,
+          associatedPrayerId: raw.associated_prayer_id,
+        });
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
 
-export function subscribeBookmarks(userId: string, callback: (action: string, record: any) => void): () => void {
+export function subscribeBookmarks(userId: string, callback: (action: string, record: Bookmark) => void): () => void {
   const channel = supabase
     .channel('bookmarks-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'bookmarks', filter: `user_id=eq.${userId}` },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = (payload.new || payload.old) as any;
+        callback(payload.eventType, {
+          id: raw.id,
+          itemType: raw.item_type,
+          itemId: raw.item_id,
+          titleEn: raw.title_en,
+          titleTa: raw.title_ta,
+        });
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
@@ -720,7 +736,10 @@ export function subscribePdfDocuments(callback: (action: string, record: any) =>
     .channel('pdf-documents-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'pdf_documents' },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, raw);
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
@@ -731,7 +750,10 @@ export function subscribePdfDocumentsByDate(date: string, callback: (action: str
     .channel(`pdf-documents-${date}-changes`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'pdf_documents', filter: `date=eq.${date}` },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, raw);
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
@@ -742,7 +764,10 @@ export function subscribeAnnouncements(callback: (action: string, record: any) =
     .channel('announcements-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'announcements' },
-      (payload) => callback(payload.eventType, payload.new)
+      (payload) => {
+        const raw = payload.new || payload.old;
+        callback(payload.eventType, raw);
+      }
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };

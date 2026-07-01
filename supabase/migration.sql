@@ -3,8 +3,9 @@
 
 -- 1. PRAYERS TABLE
 CREATE TABLE IF NOT EXISTS prayers (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  date TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL CHECK (category IN ('morning', 'noon', 'evening', 'night', 'office')),
   title_en TEXT NOT NULL,
   title_ta TEXT NOT NULL,
@@ -12,7 +13,8 @@ CREATE TABLE IF NOT EXISTS prayers (
   content_ta TEXT NOT NULL,
   scripture_ref_en TEXT,
   scripture_ref_ta TEXT,
-  is_custom BOOLEAN DEFAULT false
+  is_custom BOOLEAN DEFAULT false,
+  UNIQUE(date, category)
 );
 
 -- 2. SAINTS TABLE
@@ -229,13 +231,38 @@ ALTER TABLE pdf_documents ADD CONSTRAINT pdf_documents_date_category_language_ke
 ALTER TABLE pdf_documents DROP COLUMN IF EXISTS title_en;
 ALTER TABLE pdf_documents DROP COLUMN IF EXISTS title_ta;
 
+-- Migrate existing prayers table to fix id type and add date column
+ALTER TABLE prayers ALTER COLUMN id TYPE TEXT;
+ALTER TABLE prayers ADD COLUMN IF NOT EXISTS date TEXT NOT NULL DEFAULT '';
+ALTER TABLE prayers DROP CONSTRAINT IF EXISTS prayers_date_category_key;
+ALTER TABLE prayers ADD CONSTRAINT prayers_date_category_key UNIQUE (date, category);
+
+-- Create index for date-based prayer lookups
+CREATE INDEX IF NOT EXISTS idx_prayers_date ON prayers(date);
+
 -- Realtime for pdf_documents (so users see new PDFs instantly)
-ALTER PUBLICATION supabase_realtime ADD TABLE pdf_documents;
-ALTER PUBLICATION supabase_realtime ADD TABLE announcements;
-ALTER PUBLICATION supabase_realtime ADD TABLE prayers;
-ALTER PUBLICATION supabase_realtime ADD TABLE saints;
-ALTER PUBLICATION supabase_realtime ADD TABLE liturgical_days;
-ALTER PUBLICATION supabase_realtime ADD TABLE office_readings;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'pdf_documents' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pdf_documents;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'announcements' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE announcements;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'prayers' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE prayers;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'saints' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE saints;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'liturgical_days' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE liturgical_days;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'office_readings' AND schemaname = 'public') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE office_readings;
+  END IF;
+END;
+$$;
 
 -- =============================================================================
 -- STORAGE: Create the 'pdfs' bucket and set RLS policies

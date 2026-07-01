@@ -2,6 +2,7 @@ export type PrayerCategory = 'morning' | 'noon' | 'evening' | 'night' | 'office'
 
 export interface Prayer {
   id: string; // e.g. 'morning-prayer-1', 'custom-123'
+  date: string; // YYYY-MM-DD — date-specific prayer content
   category: PrayerCategory;
   titleEn: string;
   titleTa: string;

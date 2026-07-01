@@ -24,7 +24,6 @@ import {
   Megaphone,
   FileText,
   Eye,
-  ExternalLink
 } from 'lucide-react';
 import { Prayer, Saint, LiturgicalDay, JournalEntry, Bookmark, UserSettings, PrayerCategory, AdBanner, ParishUser, Announcement, OfficeReading, PdfDocument } from './types';
 
@@ -32,8 +31,7 @@ import { JournalReflections } from './components/JournalReflections';
 import { AdminPanel } from './components/AdminPanel';
 import { RosarySection } from './components/RosarySection';
 import { PdfReader } from './components/PdfReader';
-import { supabase, onAuthStateChange, getAdminEmail } from './supabase';
-import { fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements, deletePdfDocument } from './supabase';
+import { supabase, onAuthStateChange, getAdminEmail, fetchPrayers, savePrayer, deletePrayer, fetchSaints, saveSaint, deleteSaint, fetchLiturgicalDays, saveLiturgicalDay, deleteLiturgicalDay, fetchOfficeReadings, saveOfficeReading, deleteOfficeReading, fetchJournalEntries, fetchBookmarks, saveJournalEntry, deleteJournalEntry, saveBookmark, deleteBookmark, subscribePrayers, subscribeSaints, subscribeLiturgicalDays, subscribeOfficeReadings, subscribeJournalEntries, subscribeBookmarks, subscribePdfDocuments, fetchPdfDocuments, fetchPdfDocumentsByDate, getPdfStorageUrl, fetchAnnouncements, saveAnnouncement, deleteAnnouncement, fetchParishUsers, saveParishUser, deleteParishUser, fetchAdBanner, saveAdBanner, subscribeAnnouncements, deletePdfDocument } from './supabase';
 import { fetchExternalReadings, fetchExternalSaint, fetchExternalPrayers, fetchExternalOfficeReading, prefetchNextDays, getCachedReadings, getCachedSaint, getCachedPrayers, getCachedOfficeReading, updateCachedReadings, updateCachedSaint, updateCachedPrayers, updateCachedOfficeReading } from './externalSource';
 
 export default function App() {
@@ -48,9 +46,6 @@ export default function App() {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [pdfDocuments, setPdfDocuments] = useState<PdfDocument[]>([]);
-  const [externalReadings, setExternalReadings] = useState<LiturgicalDay | null>(null);
-  const [externalSourceLabel, setExternalSourceLabel] = useState<string>('');
-  const [isLoadingExternal, setIsLoadingExternal] = useState(false);
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
   const [autoOpenPdfId, setAutoOpenPdfId] = useState<string | null>(null);
@@ -237,54 +232,11 @@ export default function App() {
     }
   }, [selectedDate, selectedPrayerCategory, userSettings.language, pdfDocuments]);
 
-  // Fetch readings from external source (USCCB / iBreviary) when date changes
+  // Prefetch external data for offline caching (not displayed directly - only admin-saved data shows)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setIsLoadingExternal(true);
-      setExternalSourceLabel('');
-
-      // Check cache first for instant offline display
-      const cachedReadings = getCachedReadings(selectedDate);
-      const cachedSaint = getCachedSaint(selectedDate);
-      const cachedPrayers = getCachedPrayers(selectedDate);
-      const cachedOffice = getCachedOfficeReading(selectedDate);
-
-      let hasCached = false;
-      if (cachedReadings) {
-        hasCached = true;
-        setExternalReadings(cachedReadings);
-        setExternalSourceLabel('cached');
-        setLiturgicalDays(prev => {
-          if (prev.find(d => d.date === selectedDate)) return prev;
-          return [cachedReadings, ...prev];
-        });
-      }
-      if (cachedSaint) {
-        hasCached = true;
-        setSaints(prev => {
-          if (prev.find(s => s.feastDate === cachedSaint.feastDate)) return prev;
-          return [...prev, cachedSaint];
-        });
-      }
-      if (cachedPrayers) {
-        hasCached = true;
-        setPrayers(prev => {
-          const ids = new Set(prev.map(p => p.id));
-          const newP = cachedPrayers.filter(p => !ids.has(p.id));
-          if (newP.length === 0) return prev;
-          return [...newP, ...prev];
-        });
-        if (!externalSourceLabel) setExternalSourceLabel('cached');
-      }
-      if (cachedOffice) {
-        hasCached = true;
-        setOfficeReadings(prev => {
-          if (prev.find(o => o.id === cachedOffice.id)) return prev;
-          return [...prev, cachedOffice];
-        });
-      }
-
+      if (getCachedReadings(selectedDate) && getCachedSaint(selectedDate) && getCachedPrayers(selectedDate) && getCachedOfficeReading(selectedDate)) return;
       const [readingsResult, saintResult, prayersResult, officeResult] = await Promise.all([
         fetchExternalReadings(selectedDate),
         fetchExternalSaint(selectedDate),
@@ -292,49 +244,10 @@ export default function App() {
         fetchExternalOfficeReading(selectedDate),
       ]);
       if (cancelled) return;
-      setIsLoadingExternal(false);
-
-      // Update cache with fresh results
       updateCachedReadings(selectedDate, readingsResult.data, readingsResult.source);
       updateCachedSaint(selectedDate, saintResult.data, saintResult.source);
       updateCachedPrayers(selectedDate, prayersResult.data, prayersResult.source);
       updateCachedOfficeReading(selectedDate, officeResult.data, officeResult.source);
-
-      if (readingsResult.data) {
-        setExternalReadings(readingsResult.data);
-        setExternalSourceLabel(readingsResult.source);
-        setLiturgicalDays(prev => {
-          const existing = prev.find(d => d.date === selectedDate);
-          if (existing) return prev;
-          return [readingsResult.data!, ...prev];
-        });
-      }
-      if (saintResult.data) {
-        setSaints(prev => {
-          const existing = prev.find(s => s.feastDate === saintResult.data!.feastDate);
-          if (existing) return prev;
-          return [...prev, saintResult.data!];
-        });
-      }
-      if (prayersResult.data) {
-        setPrayers(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const newPrayers = prayersResult.data!.filter(p => !existingIds.has(p.id));
-          if (newPrayers.length === 0) return prev;
-          return [...newPrayers, ...prev];
-        });
-        if (!externalSourceLabel) setExternalSourceLabel(prayersResult.source);
-      }
-      if (officeResult.data) {
-        setOfficeReadings(prev => {
-          const existing = prev.find(o => o.id === officeResult.data!.id);
-          if (existing) return prev;
-          return [...prev, officeResult.data!];
-        });
-      }
-      if (!readingsResult.data && !saintResult.data && !prayersResult.data && !officeResult.data && !hasCached) {
-        setExternalSourceLabel('');
-      }
     };
     load();
     return () => { cancelled = true; };
@@ -390,9 +303,23 @@ export default function App() {
         return;
       }
 
-      // Fallback: localStorage only
+      // Fallback: restore all cached data from localStorage
+      const cachedPrayers = localStorage.getItem('breviary_prayers');
+      if (cachedPrayers) setPrayers(JSON.parse(cachedPrayers));
+      const cachedSaints = localStorage.getItem('breviary_saints');
+      if (cachedSaints) setSaints(JSON.parse(cachedSaints));
+      const cachedDays = localStorage.getItem('breviary_liturgical_days');
+      if (cachedDays) setLiturgicalDays(JSON.parse(cachedDays));
+      const cachedOffice = localStorage.getItem('breviary_office_readings');
+      if (cachedOffice) setOfficeReadings(JSON.parse(cachedOffice));
       const cachedPdfs = localStorage.getItem('breviary_pdfs');
       if (cachedPdfs) setPdfDocuments(JSON.parse(cachedPdfs));
+      const cachedAnn = localStorage.getItem('breviary_announcements');
+      if (cachedAnn) setAnnouncements(JSON.parse(cachedAnn));
+      const cachedUsers = localStorage.getItem('breviary_users');
+      if (cachedUsers) setParishUsers(JSON.parse(cachedUsers));
+      const cachedAd = localStorage.getItem('breviary_ad');
+      if (cachedAd) setAdBanner(JSON.parse(cachedAd));
     };
 
     loadFromSupabase();
@@ -596,7 +523,7 @@ export default function App() {
         } else if (action === 'UPDATE') {
           updated = updated.map(a => a.id === record.id ? { id: record.id, titleEn: record.title_en, titleTa: record.title_ta, descEn: record.desc_en, descTa: record.desc_ta, date: record.date, category: record.category, theme: record.theme } : a);
         } else if (action === 'DELETE') {
-          updated = updated.filter(a => a.id !== record.old.id);
+          updated = updated.filter(a => a.id !== record.id);
         }
         localStorage.setItem('breviary_announcements', JSON.stringify(updated));
         return updated;
@@ -742,18 +669,20 @@ export default function App() {
   };
 
   const handleSavePrayer = async (newOrEditedPrayer: Prayer) => {
-    const exists = prayers.some((p) => p.id === newOrEditedPrayer.id);
-    let updated: Prayer[];
-    if (exists) {
-      updated = prayers.map((p) => p.id === newOrEditedPrayer.id ? newOrEditedPrayer : p);
-    } else {
-      updated = [newOrEditedPrayer, ...prayers];
-    }
-    savePrayersToCache(updated);
+    setPrayers((prev) => {
+      const exists = prev.some((p) => p.id === newOrEditedPrayer.id);
+      const updated = exists
+        ? prev.map((p) => p.id === newOrEditedPrayer.id ? newOrEditedPrayer : p)
+        : [newOrEditedPrayer, ...prev];
+      localStorage.setItem('breviary_prayers', JSON.stringify(updated));
+      return updated;
+    });
     try {
       await savePrayer(newOrEditedPrayer);
-    } catch (err) {
+      console.log('Prayer saved to Supabase successfully:', newOrEditedPrayer.date, newOrEditedPrayer.category);
+    } catch (err: any) {
       console.error('Failed to save prayer to Supabase:', err);
+      alert(`Failed to save prayer to cloud: ${err?.message || err}. Check that you are logged in as admin (Supabase Auth) and the prayers table exists.`);
     }
   };
 
@@ -868,7 +797,7 @@ export default function App() {
   // --- USER LEVEL INTERACTIONS ---
   // Adding journal reflection entry
   const handleAddJournalEntry = async (title: string, reflection: string, associatedPrayerId?: string) => {
-    const journalId = `journal-${Date.now()}`;
+    const journalId = crypto.randomUUID();
     const newEntry: JournalEntry = {
       id: journalId,
       date: new Date().toISOString(),
@@ -955,7 +884,7 @@ export default function App() {
         type = 'saint';
       }
       const newB: Bookmark = {
-        id: `bookmark-${Date.now()}`,
+        id: crypto.randomUUID(),
         itemId,
         itemType: type,
         titleEn,
@@ -2005,7 +1934,7 @@ export default function App() {
                               </div>
 
                               {/* PDF view for selected category + date + language */}
-                              <div className="flex-1 flex flex-col items-center justify-center text-center py-4 space-y-4 content-scroll overflow-y-auto">
+                              <div className="flex-1 flex flex-col text-center py-4 content-scroll overflow-y-auto">
                                 {(() => {
                                   const pdf = pdfDocuments.find(
                                     d => d.category === selectedPrayerCategory && d.date === selectedDate && d.language === userSettings.language
@@ -2025,47 +1954,43 @@ export default function App() {
                                               <h3 className="text-lg font-bold text-indigo-950 dark:text-amber-50 mt-1 font-serif">{userSettings.language === 'ta' ? saint.nameTa : saint.nameEn}</h3>
                                               <p className="text-xs text-slate-500 dark:text-stone-400 mt-1 italic">{saint.feastDate}</p>
                                               <div className="h-px bg-amber-200/30 dark:bg-amber-900/20 my-3" />
-                                              <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? saint.lifeHistoryTa : saint.lifeHistoryEn}</p>
+                                              <div className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? saint.lifeHistoryTa : saint.lifeHistoryEn }} />
                                             </div>
                                           </div>
                                         );
                                       }
                                     }
                                     if (selectedPrayerCategory === 'office' || selectedPrayerCategory === 'readings') {
-                                      const day = liturgicalDays.find(d => d.date === selectedDate) || externalReadings;
+                                      const day = liturgicalDays.find(d => d.date === selectedDate);
                                       if (day) {
-                                        const isExternal = externalReadings?.date === selectedDate && externalSourceLabel;
                                         return (
                                           <div className="space-y-4 text-left w-full">
-                                            {isExternal && (
-                                              <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest block text-center">Source: {externalSourceLabel}</span>
-                                            )}
                                             {day.readingFirstEn && (
                                               <div className="p-5 rounded-xl bg-white dark:bg-stone-900/95 border border-slate-200 dark:border-stone-800 shadow-sm">
                                                 <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'முதல் வாசகம்' : 'First Reading'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.readingFirstRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn}</p>
+                                                <div className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn }} />
                                               </div>
                                             )}
                                             {day.psalmEn && (
                                               <div className="p-4 rounded-xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'பதிலுரைத் திருப்பாடல்' : 'Responsorial Psalm'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.psalmRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-loose italic font-serif text-left text-slate-600 dark:text-stone-300/80 max-w-prose`}>{userSettings.language === 'ta' ? day.psalmTa : day.psalmEn}</p>
+                                                <div className={`${contentSizeClass} leading-loose italic font-serif text-left text-slate-600 dark:text-stone-300/80 max-w-prose`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? day.psalmTa : day.psalmEn }} />
                                               </div>
                                             )}
                                             {day.gospelEn && (
                                               <div className="p-4 rounded-xl bg-rose-50/30 dark:bg-rose-950/10 border border-rose-200/40 dark:border-rose-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'நற்செய்தி' : 'Gospel'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.gospelRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.gospelTa : day.gospelEn}</p>
+                                                <div className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? day.gospelTa : day.gospelEn }} />
                                               </div>
                                             )}
                                             {selectedPrayerCategory === 'office' && day.officeEn && (
                                               <div className="p-4 rounded-xl bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-200/30 dark:border-indigo-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'வாசகங்கள் வழிபாடு' : 'Office of Readings'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.officeRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.officeTa : day.officeEn}</p>
+                                                <div className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? day.officeTa : day.officeEn }} />
                                               </div>
                                             )}
                                           </div>
@@ -2073,15 +1998,32 @@ export default function App() {
                                       }
                                     }
                                     if (selectedPrayerCategory === 'morning' || selectedPrayerCategory === 'noon' || selectedPrayerCategory === 'evening' || selectedPrayerCategory === 'night') {
-                                      const prayer = prayers.find(p => p.category === selectedPrayerCategory);
+                                      const prayer = prayers.find(p => p.date === selectedDate && p.category === selectedPrayerCategory);
                                       if (prayer) {
                                         return (
                                           <div className="space-y-3 text-left w-full">
+                                            {/* PDF status banner */}
+                                            {(() => {
+                                              const pdfForDate = pdfDocuments.find(
+                                                d => d.category === selectedPrayerCategory && d.date === selectedDate
+                                              );
+                                              if (pdfForDate) {
+                                                return (
+                                                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 flex items-center gap-2 text-left">
+                                                    <FileText size={14} className="text-amber-600 shrink-0" />
+                                                    <span className="text-xs text-amber-800 dark:text-amber-300">
+                                                      PDF already uploaded for this date: <strong>{pdfForDate.title}</strong> ({pdfForDate.language === 'ta' ? 'தமிழ்' : 'EN'}). <span className="font-bold">Opening PDF viewer...</span>
+                                                    </span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
                                             <div className="p-6 rounded-xl bg-white dark:bg-stone-900/95 border border-amber-200/40 dark:border-amber-900/30 shadow-sm">
                                               <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'இன்றைய செபம்' : "Today's Prayer"}</span>
                                               <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1.5 font-serif">{userSettings.language === 'ta' ? prayer.titleTa : prayer.titleEn}</h3>
                                               <div className="h-px bg-amber-200/40 dark:bg-amber-900/30 my-4" />
-                                              <div className={`prayer-content leading-loose ${contentSizeClass}`}>{userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn}</div>
+                                              <div className={`prayer-content leading-loose ${contentSizeClass}`} dangerouslySetInnerHTML={{ __html: userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn }} />
                                             </div>
                                           </div>
                                         );
@@ -2097,15 +2039,9 @@ export default function App() {
                                         </p>
                                         <p className="text-xs text-slate-400">
                                           {userSettings.language === 'ta'
-                                            ? 'PDF ஏற்றப்படவில்லை அல்லது வெளிப்புற மூலத்திலிருந்து தரவு கிடைக்கவில்லை'
-                                            : 'No PDF uploaded and no external data found for this date'}
+                                            ? 'தேர்ந்தெடுக்கப்பட்ட தேதிக்கு தரவு இல்லை'
+                                            : 'No data available for the selected date'}
                                         </p>
-                                        {isLoadingExternal && (
-                                          <div className="flex items-center justify-center gap-2 text-xs text-amber-600">
-                                            <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-                                            <span>{userSettings.language === 'ta' ? 'வெளிப்புற மூலத்திலிருந்து தரவு பெறப்படுகிறது...' : 'Fetching from external source...'}</span>
-                                          </div>
-                                        )}
                                       </div>
                                     );
                                   }

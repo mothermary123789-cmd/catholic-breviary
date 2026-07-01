@@ -3,6 +3,7 @@ import { Prayer, Saint, LiturgicalDay, OfficeReading } from './types';
 export const SEED_PRAYERS: Prayer[] = [
   {
     id: 'morning-prayer-01',
+    date: '',
     category: 'morning',
     titleEn: 'Morning Prayer (Lauds) - Invitatory',
     titleTa: 'காலை வழிபாடு (புகழ்மாலை) - அழைப்புரை',
@@ -62,6 +63,7 @@ Lord, fill our hearts with your love as the dawn breaks. Let the sun of justice 
   },
   {
     id: 'noon-prayer-001',
+    date: '',
     category: 'noon',
     titleEn: 'Midday Prayer (Sext)',
     titleTa: 'நண்பகல் வழிபாடு (இருதயமாலை)',
@@ -114,6 +116,7 @@ Lord God, Savior of mankind, You made the midday hour a time of grace for us in 
   },
   {
     id: 'evening-prayer-1',
+    date: '',
     category: 'evening',
     titleEn: 'Evening Prayer (Vespers)',
     titleTa: 'மாலை வழிபாடு (புகழ்மாலை)',
@@ -181,6 +184,7 @@ Stay with us, Lord, for evening draws near and the day is spent. Guide us on our
   },
   {
     id: 'night-prayer-01',
+    date: '',
     category: 'night',
     titleEn: 'Night Prayer (Compline)',
     titleTa: 'இரவு வழிபாடு (நிறைவுமாலை)',
@@ -237,6 +241,7 @@ As it was in the beginning, is now, and will be forever. Amen.`,
   },
   {
     id: 'office-readings-1',
+    date: '',
     category: 'office',
     titleEn: 'Office of Readings (Matins)',
     titleTa: 'வாசகங்கள் வழிபாடு (நள்ளிரவுமாலை)',

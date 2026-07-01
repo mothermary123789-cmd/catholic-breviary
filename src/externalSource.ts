@@ -185,6 +185,7 @@ function formatIbreviaryText(content: string): string {
   let text = content;
 
   text = text
+    .replace(/<h1>\s*Breviary\s*<\/h1>/gi, '')
     .replace(/<h1>/gi, '\n')
     .replace(/<\/h1>/gi, '\n')
     .replace(/<p[^>]*>/gi, '')
@@ -192,7 +193,7 @@ function formatIbreviaryText(content: string): string {
 
   text = text.replace(
     /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi,
-    (_, name) => `\n\n── ${cleanHtml(name).toUpperCase()} ──\n`
+    (_, name) => `\n\n${cleanHtml(name).toUpperCase()}\n`
   );
 
   text = text.replace(
@@ -202,7 +203,7 @@ function formatIbreviaryText(content: string): string {
 
   text = text.replace(
     /<span\s+class="rubrica">(.*?)<\/span>/gi,
-    (_, name) => `\n(${cleanHtml(name)})`
+    (_, name) => `\n${cleanHtml(name)}`
   );
 
   text = text.replace(/<hr\s*\/?>/gi, '\n\n');
@@ -210,14 +211,20 @@ function formatIbreviaryText(content: string): string {
   text = text.replace(/<br\s*\/?>/gi, '\n');
   text = text.replace(/<\/div>/gi, '\n');
 
-  text = text.replace(/Ant\./g, '\nAnt. ');
+  text = text.replace(/Ant\. /g, '\nAnt. ');
   text = text.replace(/℟\. \./g, '℟. ');
-  text = text.replace(/℟\./g, '\n℟. ');
-  text = text.replace(/℣\./g, '\n℣. ');
+  text = text.replace(/℟\. /g, '\n℟. ');
+  text = text.replace(/℣\. /g, '\n℣. ');
 
   text = text.replace(/<\/?(?:strong|b|em|i|u|a|span|div|li|ul|ol)(?:\s[^>]*)?>/gi, '');
 
   text = text.replace(/<[^>]+>/g, '');
+
+  text = text
+    .replace(/\((\+)\)/g, '$1')
+    .replace(/\((—)\)/g, '$1')
+    .replace(/\((\*)\)/g, '$1')
+    .replace(/\((†)\)/g, '$1');
 
   text = decodeEntities(text);
 
@@ -229,6 +236,23 @@ function formatIbreviaryText(content: string): string {
     .replace(/\*\*\*\*\*\*/g, '')
     .replace(/- Menu -/g, '')
     .replace(/DONATE.*?(?:SUBSCRIBE.*?)?$/s, '')
+    .trim();
+
+  const lines = text.split('\n');
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const line of lines) {
+    const key = line.trim();
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    deduped.push(line);
+  }
+
+  text = deduped.join('\n').trim();
+
+  text = text
+    .replace(/^Breviary\s*/i, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 
   return text;
@@ -270,7 +294,7 @@ function extractIbreviaryReadings(html: string): {
   return readings;
 }
 
-function extractPrayerContent(html: string, sectionName: string): Prayer | null {
+function extractPrayerContent(html: string, sectionName: string, date: string): Prayer | null {
   const content = extractIbreviaryContent(html);
   const dateLabel = extractIbreviaryDateLabel(html);
 
@@ -295,7 +319,8 @@ function extractPrayerContent(html: string, sectionName: string): Prayer | null 
   if (!fullText) return null;
 
   return {
-    id: `ibreviary-${sectionName}-${Date.now()}`,
+    id: `ibreviary-${sectionName}-${date}`,
+    date,
     category,
     titleEn: `${hourLabel} - ${dateLabel}`,
     titleTa: `${hourLabel} - ${dateLabel}`,
@@ -409,6 +434,31 @@ async function fetchUsccbPage(date: string): Promise<string | null> {
 
 async function fetchIbreviarySection(section: string, date: string): Promise<string | null> {
   return fetchViaApi(`/api/ibreviary?section=${section}&date=${date}`);
+}
+
+async function fetchSantiebeatiPage(date: string): Promise<string | null> {
+  const [y, m, d] = date.split('-');
+  return fetchViaApi(`/api/santiebeati?month=${m}&day=${d}`);
+}
+
+function parseSantiebeatiSaint(html: string, date: string): Saint | null {
+  try {
+    const match = html.match(/<a\s+href="\/dettaglio\/\d+"[^>]*>.*?<b>(.*?)<\/b>/s);
+    if (!match) return null;
+    const name = match[1].trim();
+    if (!name) return null;
+    const monthDay = date.substring(5);
+    return {
+      id: `santiebeati-${monthDay}`,
+      nameEn: name,
+      nameTa: name,
+      feastDate: monthDay,
+      lifeHistoryEn: `Feast of ${name}. Source: santiebeati.it.`,
+      lifeHistoryTa: `புனித ${name} திருவிழா. மூலம்: santiebeati.it.`,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── USCCB parsers ───
@@ -544,6 +594,12 @@ export async function fetchExternalSaint(date: string): Promise<ExternalFetchRes
     if (data) return { data, source: 'iBreviary' };
   }
 
+  html = await fetchSantiebeatiPage(date);
+  if (html) {
+    const data = parseSantiebeatiSaint(html, date);
+    if (data) return { data, source: 'santiebeati' };
+  }
+
   return { data: null, source: 'none' };
 }
 
@@ -556,7 +612,7 @@ export async function fetchExternalPrayers(date: string): Promise<ExternalFetchR
     const html = await fetchIbreviarySection(hour, date);
     if (!html) continue;
     source = 'iBreviary';
-    const prayer = extractPrayerContent(html, hour);
+    const prayer = extractPrayerContent(html, hour, date);
     if (prayer) prayers.push(prayer);
   }
 
