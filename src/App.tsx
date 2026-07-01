@@ -2025,7 +2025,7 @@ export default function App() {
                                               <h3 className="text-lg font-bold text-indigo-950 dark:text-amber-50 mt-1 font-serif">{userSettings.language === 'ta' ? saint.nameTa : saint.nameEn}</h3>
                                               <p className="text-xs text-slate-500 dark:text-stone-400 mt-1 italic">{saint.feastDate}</p>
                                               <div className="h-px bg-amber-200/30 dark:bg-amber-900/20 my-3" />
-                                              <p className={`${contentSizeClass} leading-[1.75] font-serif text-justify text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? saint.lifeHistoryTa : saint.lifeHistoryEn}</p>
+                                              <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? saint.lifeHistoryTa : saint.lifeHistoryEn}</p>
                                             </div>
                                           </div>
                                         );
@@ -2044,28 +2044,28 @@ export default function App() {
                                               <div className="p-4 rounded-xl bg-white dark:bg-stone-900/95 border border-slate-200 dark:border-stone-800 shadow-sm">
                                                 <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'முதல் வாசகம்' : 'First Reading'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.readingFirstRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-[1.75] font-serif text-justify text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn}</p>
+                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.readingFirstTa : day.readingFirstEn}</p>
                                               </div>
                                             )}
                                             {day.psalmEn && (
                                               <div className="p-4 rounded-xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'பதிலுரைத் திருப்பாடல்' : 'Responsorial Psalm'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.psalmRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-[1.75] italic font-serif text-justify text-slate-600 dark:text-stone-300/80 max-w-prose`}>{userSettings.language === 'ta' ? day.psalmTa : day.psalmEn}</p>
+                                                <p className={`${contentSizeClass} leading-loose italic font-serif text-left text-slate-600 dark:text-stone-300/80 max-w-prose`}>{userSettings.language === 'ta' ? day.psalmTa : day.psalmEn}</p>
                                               </div>
                                             )}
                                             {day.gospelEn && (
                                               <div className="p-4 rounded-xl bg-rose-50/30 dark:bg-rose-950/10 border border-rose-200/40 dark:border-rose-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'நற்செய்தி' : 'Gospel'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.gospelRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-[1.75] font-serif text-justify text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.gospelTa : day.gospelEn}</p>
+                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.gospelTa : day.gospelEn}</p>
                                               </div>
                                             )}
                                             {selectedPrayerCategory === 'office' && day.officeEn && (
                                               <div className="p-4 rounded-xl bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-200/30 dark:border-indigo-900/20 shadow-sm">
                                                 <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'வாசகங்கள் வழிபாடு' : 'Office of Readings'}</span>
                                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-2 italic">{day.officeRefEn}</span>
-                                                <p className={`${contentSizeClass} leading-[1.75] font-serif text-justify text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.officeTa : day.officeEn}</p>
+                                                <p className={`${contentSizeClass} leading-loose font-serif text-left text-slate-700 dark:text-stone-200/90 max-w-prose`}>{userSettings.language === 'ta' ? day.officeTa : day.officeEn}</p>
                                               </div>
                                             )}
                                           </div>
@@ -2081,7 +2081,7 @@ export default function App() {
                                               <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest block">{userSettings.language === 'ta' ? 'இன்றைய செபம்' : "Today's Prayer"}</span>
                                               <h3 className="text-base font-bold text-indigo-950 dark:text-amber-50 mt-1 font-serif">{userSettings.language === 'ta' ? prayer.titleTa : prayer.titleEn}</h3>
                                               <div className="h-px bg-amber-200/40 dark:bg-amber-900/30 my-3" />
-                                              <div className={`${contentSizeClass} leading-[1.75] whitespace-pre-wrap text-slate-700 dark:text-stone-200/90 font-serif max-w-prose text-justify`}>{userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn}</div>
+                                              <div className={`prayer-content leading-loose ${contentSizeClass}`}>{userSettings.language === 'ta' ? prayer.contentTa : prayer.contentEn}</div>
                                             </div>
                                           </div>
                                         );

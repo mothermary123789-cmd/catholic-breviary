@@ -31,10 +31,8 @@
 .liturgical-text {
   font-family: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
   line-height: 1.75;
-  text-align: justify;
-  hyphens: auto;
-  -webkit-hyphens: auto;
-  word-spacing: 0.03em;
+  text-align: left;
+  max-width: 65ch;
 }
 
 .liturgical-section {
@@ -52,7 +50,8 @@
 .liturgical-response {
   font-style: italic;
   color: #78716c;
-  margin-left: 1rem;
+  margin-left: 1.5rem;
+  display: block;
 }
 
 .dark .liturgical-response {
@@ -61,6 +60,30 @@
 
 .dark .liturgical-section {
   color: #fbbf24;
+}
+
+/* Prayer content headings (── SECTION ──) */
+.prayer-content {
+  font-family: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  line-height: 2;
+  white-space: pre-wrap;
+  text-align: left;
+  color: #334155;
+}
+
+.dark .prayer-content {
+  color: #e7e5e4;
+}
+
+/* Better content card spacing */
+.content-card {
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: white;
+}
+
+.dark .content-card {
+  background: rgba(22, 18, 14, 0.95);
 }
 
 /* Better scrollbar for content areas */

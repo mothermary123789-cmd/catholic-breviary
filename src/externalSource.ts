@@ -184,21 +184,38 @@ function decodeEntities(text: string): string {
 function formatIbreviaryText(content: string): string {
   let text = content;
 
+  text = text
+    .replace(/<h1>/gi, '\n')
+    .replace(/<\/h1>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/p>/gi, '\n\n');
+
   text = text.replace(
     /<span\s+class="capolettera_piccolo">(.*?)<\/span>/gi,
-    (_, name) => `\n\n${cleanHtml(name).toUpperCase()}\n`
+    (_, name) => `\n\n── ${cleanHtml(name).toUpperCase()} ──\n`
+  );
+
+  text = text.replace(
+    /<span\s+class="titolo">(.*?)<\/span>/gi,
+    (_, name) => `\n${cleanHtml(name)}\n`
+  );
+
+  text = text.replace(
+    /<span\s+class="rubrica">(.*?)<\/span>/gi,
+    (_, name) => `\n(${cleanHtml(name)})`
   );
 
   text = text.replace(/<hr\s*\/?>/gi, '\n\n');
 
   text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<\/h1>/gi, '\n');
-  text = text.replace(/<\/p>/gi, '\n\n');
   text = text.replace(/<\/div>/gi, '\n');
 
   text = text.replace(/Ant\./g, '\nAnt. ');
+  text = text.replace(/℟\. \./g, '℟. ');
   text = text.replace(/℟\./g, '\n℟. ');
   text = text.replace(/℣\./g, '\n℣. ');
+
+  text = text.replace(/<\/?(?:strong|b|em|i|u|a|span|div|li|ul|ol)(?:\s[^>]*)?>/gi, '');
 
   text = text.replace(/<[^>]+>/g, '');
 
